@@ -119,7 +119,7 @@ Modernize digital justice systems
 
 [Youssef Bassiony] – AI & System Architecture
 
-[Youssef mohammed] – AI & System Architecture
+[Youssef Rifat] – AI & System Architecture
 
 [Youstina samy] – AI & System Architecture
 
