@@ -65,7 +65,7 @@ Our system performs the following steps:
 ## 🧠 System Architecture
 
 - **Backend:** FastAPI  
-- **Frontend:** Streamlit  
+- **Frontend:** React + Vite + Tailwind CSS + Three.js  
 - **Database:** PostgreSQL  
 - **Containerization:** Docker & Docker Compose  
 - **OCR Engine:** Text extraction from images & PDFs  
