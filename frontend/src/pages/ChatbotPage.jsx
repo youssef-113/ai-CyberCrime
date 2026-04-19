@@ -10,7 +10,7 @@ import clsx from 'clsx'
 
 const WELCOME_MESSAGE = {
   role: 'assistant',
-  content: 'Welcome to the ACEB Legal Chatbot. I can answer questions about Egyptian cybercrime law (Law 175/2018) and help you understand your case. What would you like to know?',
+  content: 'Welcome to the Cybercrime AI Legal Chatbot. I can answer questions about Egyptian cybercrime law (Law 175/2018) and help you understand your case. What would you like to know?',
   timestamp: new Date().toISOString(),
 }
 

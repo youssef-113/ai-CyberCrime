@@ -80,7 +80,7 @@ export function usePdfDownload() {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `ACEB_Report_${caseId}.pdf`
+      link.download = `Cybercrime AI_Report_${caseId}.pdf`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)

@@ -6,22 +6,28 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - .env
-    depends_on:
-      - db
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    environment:
+      - PYTHONUNBUFFERED=1
 
   frontend:
     build: ./frontend
     ports:
       - "3000:3000"
-    depends_on:
-      - backend
-
-  db:
-    image: postgres:14
     environment:
-      POSTGRES_USER: cyberuser
-      POSTGRES_PASSWORD: cyberpass
-      POSTGRES_DB: cybercrime
+      - VITE_API_URL=http://backend:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  qdrant:
+    image: qdrant/qdrant:latest
     ports:
-      - "5432:5432"
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+
+volumes:
+  qdrant_storage:

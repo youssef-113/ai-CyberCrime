@@ -30,7 +30,7 @@ export default function Header({ onMenuToggle }) {
               <Shield className="w-8 h-8 text-primary" />
             </motion.div>
             <span className="text-lg font-display font-bold gradient-text hidden sm:inline">
-              ACEB
+              Cybercrime AI
             </span>
           </Link>
         </div>

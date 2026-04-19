@@ -74,7 +74,7 @@ export default function LandingPage() {
             >
               <img
                 src="/images/Gemini_Generated_Image_ei8n0xei8n0xei8n.png"
-                alt="ACEB Logo"
+                alt="Cybercrime AI Logo"
                 className="w-24 h-24 object-contain rounded-xl shadow-glow"
               />
             </motion.div>
@@ -175,7 +175,7 @@ export default function LandingPage() {
             <div className="relative h-64 lg:h-auto">
               <img
                 src="/images/a-sleek-corporate-poster-design-featurin_FOcW4B5jRbKDVIj4LNrtYw_ng88QlxlTCCU7uzM4BL7Fg.jpeg"
-                alt="ACEB Architecture"
+                alt="Cybercrime AI Architecture"
                 className="absolute inset-0 w-full h-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-r from-neutral-950 via-neutral-950/50 to-transparent lg:bg-gradient-to-l" />
@@ -210,7 +210,7 @@ export default function LandingPage() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-neutral-500">
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-primary" />
-            <span>ACEB — AI Cybercrime Evidence Builder</span>
+            <span>Cybercrime AI — AI Cybercrime Evidence Builder</span>
           </div>
           <p>Egyptian Law No. 175/2018 · Built for Digital Justice</p>
         </div>

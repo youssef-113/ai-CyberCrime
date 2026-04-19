@@ -5,7 +5,7 @@ const ThemeContext = createContext(null)
 
 export function ThemeProvider({ children }) {
   const [language, setLanguageState] = useState(() => {
-    return localStorage.getItem('aceb_lang') || 'en'
+    return localStorage.getItem('Cybercrime AI_lang') || 'en'
   })
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -14,7 +14,7 @@ export function ThemeProvider({ children }) {
     const lang = LANGUAGES.find((l) => l.code === code)
     if (lang) {
       setLanguageState(lang.code)
-      localStorage.setItem('aceb_lang', lang.code)
+      localStorage.setItem('Cybercrime AI_lang', lang.code)
       document.documentElement.lang = lang.code
       document.documentElement.dir = lang.dir
     }
