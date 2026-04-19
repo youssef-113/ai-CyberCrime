@@ -25,15 +25,18 @@ export default function MainLayout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto bg-neutral-950 perspective-grid">
-          <div className="max-w-7xl mx-auto px-4 lg:px-6 py-6">
-            <Outlet />
-          </div>
-        </main>
+    <div className="min-h-screen flex flex-col relative">
+      <Scene3D />
+      <div className="relative z-10 flex flex-col min-h-screen">
+        <Header onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
+        <div className="flex flex-1 overflow-hidden">
+          <Sidebar />
+          <main className="flex-1 overflow-y-auto bg-neutral-950/80 backdrop-blur-sm perspective-grid">
+            <div className="max-w-7xl mx-auto px-4 lg:px-6 py-6">
+              <Outlet />
+            </div>
+          </main>
+        </div>
       </div>
 
       {mobileMenuOpen && (

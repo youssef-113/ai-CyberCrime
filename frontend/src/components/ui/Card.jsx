@@ -6,7 +6,7 @@ const variants = {
   glass: 'perspective-card-glass',
 }
 
-export default function Card({ variant = 'default', className, children, ...props }) {
+function Card({ variant = 'default', className, children, ...props }) {
   return (
     <div className={clsx(variants[variant], className)} {...props}>
       {children}
@@ -29,6 +29,9 @@ export function CardBody({ className, children }) {
     </div>
   )
 }
+
+export { Card }
+export default Card
 
 export function CardFooter({ className, children }) {
   return (
