@@ -7,24 +7,135 @@ export default {
   theme: {
     extend: {
       colors: {
-        cyber: {
-          dark: '#0a0e27',
-          blue: '#00d4ff',
-          purple: '#7b2cbf',
-          pink: '#ff006e',
-          green: '#00ff88'
-        }
+        primary: {
+          DEFAULT: '#00BD7D',
+          50: '#E6F9F1',
+          100: '#B3EFD9',
+          200: '#80E7C1',
+          300: '#4DDFA9',
+          400: '#1AD79F',
+          500: '#00BD7D',
+          600: '#009746',
+          700: '#007138',
+          800: '#004B2A',
+          900: '#00261C',
+        },
+        neutral: {
+          50: '#F9FAFB',
+          100: '#F3F4F6',
+          200: '#E5E7EB',
+          300: '#D1D5DB',
+          400: '#9CA3AF',
+          500: '#6B7280',
+          600: '#4B5563',
+          700: '#374151',
+          800: '#1F2937',
+          900: '#111827',
+          950: '#0A0F1C',
+        },
+        success: {
+          DEFAULT: '#16A34A',
+          light: '#22C55E',
+          dark: '#15803D',
+        },
+        warning: {
+          DEFAULT: '#D97706',
+          light: '#F59E0B',
+          dark: '#B45309',
+        },
+        danger: {
+          DEFAULT: '#DC2626',
+          light: '#EF4444',
+          dark: '#B91C1C',
+        },
+        surface: {
+          DEFAULT: '#FFFFFF',
+          muted: '#F8FAFC',
+          elevated: '#FFFFFF',
+          overlay: 'rgba(0,0,0,0.5)',
+        },
+        accent: {
+          blue: '#00D4FF',
+          purple: '#7B2CBF',
+          pink: '#FF006E',
+        },
+      },
+      fontFamily: {
+        sans: ['Poppins', 'system-ui', 'sans-serif'],
+        display: ['Oswald', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
+      },
+      fontSize: {
+        'xs': ['0.75rem', { lineHeight: '1rem' }],
+        'sm': ['0.875rem', { lineHeight: '1.25rem' }],
+        'base': ['1rem', { lineHeight: '1.5rem' }],
+        'lg': ['1.25rem', { lineHeight: '1.75rem' }],
+        'xl': ['1.5rem', { lineHeight: '2rem' }],
+        '2xl': ['1.875rem', { lineHeight: '2.25rem' }],
+        '3xl': ['2rem', { lineHeight: '2.5rem' }],
+      },
+      spacing: {
+        '1': '0.25rem',
+        '2': '0.5rem',
+        '3': '0.75rem',
+        '4': '1rem',
+        '6': '1.5rem',
+        '8': '2rem',
+      },
+      borderRadius: {
+        'sm': '0.375rem',
+        'DEFAULT': '0.5rem',
+        'md': '0.625rem',
+        'lg': '0.75rem',
+        'xl': '1rem',
+        '2xl': '1.5rem',
+      },
+      boxShadow: {
+        'sm': '0 1px 2px 0 rgba(0,0,0,0.05)',
+        'DEFAULT': '0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1)',
+        'md': '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1)',
+        'lg': '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1)',
+        'xl': '0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
+        'perspective': '0 8px 32px rgba(0,189,125,0.12), 0 2px 8px rgba(0,0,0,0.08)',
+        'perspective-lg': '0 16px 48px rgba(0,189,125,0.15), 0 4px 16px rgba(0,0,0,0.1)',
+        'glow': '0 0 20px rgba(0,189,125,0.3)',
+        'glow-lg': '0 0 40px rgba(0,189,125,0.4)',
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'float': 'float 6s ease-in-out infinite',
+        'slide-up': 'slideUp 0.3s ease-out',
+        'slide-down': 'slideDown 0.3s ease-out',
+        'fade-in': 'fadeIn 0.3s ease-out',
+        'scale-in': 'scaleIn 0.2s ease-out',
+        'spin-slow': 'spin 3s linear infinite',
       },
       keyframes: {
         float: {
           '0%, 100%': { transform: 'translateY(0px)' },
           '50%': { transform: 'translateY(-20px)' },
-        }
-      }
+        },
+        slideUp: {
+          '0%': { transform: 'translateY(10px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        slideDown: {
+          '0%': { transform: 'translateY(-10px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        scaleIn: {
+          '0%': { transform: 'scale(0.95)', opacity: '0' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+      },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+        'perspective-mesh': 'linear-gradient(135deg, rgba(0,189,125,0.05) 0%, rgba(123,44,191,0.05) 50%, rgba(0,212,255,0.05) 100%)',
+      },
     },
   },
   plugins: [],

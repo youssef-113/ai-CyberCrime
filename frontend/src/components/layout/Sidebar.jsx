@@ -1,0 +1,60 @@
+import { NavLink } from 'react-router-dom'
+import { Home, Search, LayoutDashboard, MessageSquare, Settings, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useTheme } from '../../context/ThemeContext'
+import clsx from 'clsx'
+
+const navItems = [
+  { path: '/', icon: Home, label: 'Home' },
+  { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/analyze', icon: Search, label: 'New Case' },
+  { path: '/chatbot', icon: MessageSquare, label: 'Legal Chat' },
+  { path: '/settings', icon: Settings, label: 'Settings' },
+]
+
+export default function Sidebar() {
+  const { sidebarCollapsed, toggleSidebar, isRtl } = useTheme()
+
+  return (
+    <aside
+      className={clsx(
+        'hidden lg:flex flex-col border-r border-neutral-800/50 bg-neutral-950/50 transition-all duration-300',
+        sidebarCollapsed ? 'w-16' : 'w-56'
+      )}
+    >
+      <nav className="flex-1 py-4 px-2 space-y-1">
+        {navItems.map(({ path, icon: Icon, label }) => (
+          <NavLink
+            key={path}
+            to={path}
+            end={path === '/'}
+            className={({ isActive }) =>
+              clsx(
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
+                isActive
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200'
+              )
+            }
+          >
+            <Icon className="w-5 h-5 shrink-0" />
+            {!sidebarCollapsed && <span>{label}</span>}
+          </NavLink>
+        ))}
+      </nav>
+
+      <div className="p-2 border-t border-neutral-800/50">
+        <button
+          onClick={toggleSidebar}
+          className="btn-ghost btn-icon w-full flex items-center justify-center"
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {sidebarCollapsed ? (
+            isRtl ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />
+          ) : (
+            isRtl ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />
+          )}
+        </button>
+      </div>
+    </aside>
+  )
+}
