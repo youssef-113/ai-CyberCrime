@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>محضر بلاغ إلكتروني</title>
+    <style>
+        body {
+            font-family: 'DejaVu Sans', Arial, sans-serif;
+            font-size: 12pt;
+            line-height: 1.6;
+            margin: 2cm;
+            direction: rtl;
+        }
+        h1 {
+            text-align: center;
+            font-size: 18pt;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+        }
+        h2 {
+            font-size: 14pt;
+            color: #333;
+            margin-top: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .info-box {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+            background: #f9f9f9;
+        }
+        .timeline-item {
+            border-right: 3px solid #007bff;
+            padding-right: 10px;
+            margin: 10px 0;
+        }
+        .article-box {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 5px 0;
+            background: #fafafa;
+        }
+        .score {
+            font-size: 16pt;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            font-size: 10pt;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>محضر بلاغ إلكتروني</h1>
+        <p>بناءً على أحكام قانون مكافحة جرائم تقنية المعلومات رقم 175 لسنة 2018</p>
+    </div>
+
+    <h2>معلومات البلاغ</h2>
+    <div class="info-box">
+        <p><strong>رقم القضية:</strong> {{ case_id }}</p>
+        <p><strong>نوع الجريمة:</strong> {{ crime_type }}</p>
+        <p><strong>تاريخ التقديم:</strong> {{ generated_date }}</p>
+        <p><strong>مقدم البلاغ:</strong> {{ complainant_name }}</p>
+    </div>
+
+    <h2>ملخص الأدلة</h2>
+    <p>{{ evidence_summary }}</p>
+
+    <h2>الخط الزمني للأحداث</h2>
+    {% for event in timeline %}
+    <div class="timeline-item">
+        <p><strong>{{ event.date }}:</strong> {{ event.description }}</p>
+    </div>
+    {% endfor %}
+
+    <h2>المواد القانونية المطبقة</h2>
+    {% for article in law_articles %}
+    <div class="article-box">
+        <p><strong>المادة {{ article.article_number }} - {{ article.law }}</strong></p>
+        <p>{{ article.text }}</p>
+        {% if article.penalty_ar %}
+        <p><strong>العقوبة:</strong> {{ article.penalty_ar }}</p>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <h2>تقييم قوة الأدلة</h2>
+    <div class="info-box">
+        <p class="score">{{ score }}/100 - {{ grade }}</p>
+        <p>تم التحقق من جميع الادعاءات ضد الأدلة المقدمة</p>
+    </div>
+
+    <div class="footer">
+        <p>تم إنشاء هذا المحضر بواسطة نظام الذكاء الاصطناعي للدلائل الجنائية الإلكترونية</p>
+        <p>مصر - 2024</p>
+    </div>
+</body>
+</html>
