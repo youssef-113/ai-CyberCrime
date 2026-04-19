@@ -78,3 +78,68 @@ Case‑aware: uses uploaded evidence
 Zero invented article numbers
 
 Session memory functioning
+
+
+
+
+
+
+///////////////////
+e Setup Guide — ACEB Project
+1. Clone Repository
+bash
+git clone https://github.com/yourusername/ai-cybercrime.git
+cd ai-cybercrime
+2. Create Conda Environment
+bash
+conda create -n aceb python=3.11 -y
+conda activate aceb
+3. Backend Setup
+bash
+cd assist
+pip install -r requirements.txt
+Create .env file:
+
+bash
+cat > .env << 'EOF'
+LLM_API_KEY=your-openai-key
+TAVILY_API_KEY=your-tavily-key
+EOF
+Start backend services with Docker:
+
+bash
+docker-compose up --build -d
+Or run locally:
+
+bash
+python api_gateway.py
+4. Frontend Setup
+bash
+cd ../frontend
+npm install
+Create .env file:
+
+bash
+cat > .env << 'EOF'
+VITE_API_URL=http://localhost:8000
+EOF
+5. Run Development Servers
+Backend (if not using Docker):
+
+bash
+cd ../assist
+conda activate aceb
+python api_gateway.py
+Frontend:
+
+bash
+cd ../frontend
+npm run dev
+6. Verify Everything Works
+bash
+curl http://localhost:8000/health
+Open browser: http://localhost:3000
+
+Docker Quick Start (Everything)
+bash
+docker-compose -f docker-compose.yml up --build -d
