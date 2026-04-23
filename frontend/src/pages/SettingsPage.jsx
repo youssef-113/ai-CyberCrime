@@ -1,36 +1,63 @@
-import { Globe, Shield, Server, Info } from 'lucide-react'
+import { useState } from 'react'
+import { Globe, Shield, Server, Info, RefreshCw, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
 import { Card, CardBody } from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Badge from '../components/ui/Badge'
 import { useTheme } from '../context/ThemeContext'
+import { useHealthCheck } from '../api/hooks'
 import { LANGUAGES } from '../utils/constants'
+import { getTranslation } from '../utils/translations'
 import toast from 'react-hot-toast'
 
 export default function SettingsPage() {
   const { language, setLanguage, isRtl } = useTheme()
+  const { health, checkHealth, loading } = useHealthCheck()
+  
+  const t = (key) => getTranslation(language, key)
 
   const handleLanguageChange = (code) => {
     setLanguage(code)
     const lang = LANGUAGES.find((l) => l.code === code)
-    toast.success(`Language changed to ${lang?.label}`)
+    toast.success(t('settings.languageDesc'))
+  }
+
+  const handleTestConnection = async () => {
+    try {
+      await checkHealth()
+      toast.success('API is healthy')
+    } catch {
+      toast.error('Cannot reach API server')
+    }
+  }
+
+  const getServiceIcon = (status) => {
+    if (status === 'healthy') return <CheckCircle2 className="w-4 h-4 text-success-light" />
+    if (status === 'unhealthy') return <XCircle className="w-4 h-4 text-danger-light" />
+    return <AlertCircle className="w-4 h-4 text-warning-light" />
+  }
+
+  const getServiceBadge = (status) => {
+    if (status === 'healthy') return <Badge variant="success">Healthy</Badge>
+    if (status === 'unhealthy') return <Badge variant="danger">Unhealthy</Badge>
+    return <Badge variant="warning">Unreachable</Badge>
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <div>
-        <h1 className="section-title">Settings</h1>
-        <p className="section-subtitle">Configure your preferences</p>
+        <h1 className="section-title">{t('settings.title')}</h1>
+        <p className="section-subtitle">{t('settings.subtitle')}</p>
       </div>
 
       <Card>
         <div className="px-6 py-4 border-b border-neutral-800 flex items-center gap-2">
           <Globe className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold">Language</h2>
+          <h2 className="text-lg font-semibold">{t('settings.language')}</h2>
         </div>
         <CardBody>
           <p className="text-sm text-neutral-400 mb-4">
-            Select your preferred language. Arabic enables RTL layout.
+            {t('settings.languageDesc')}
           </p>
           <div className="flex gap-3">
             {LANGUAGES.map((lang) => (
@@ -44,7 +71,7 @@ export default function SettingsPage() {
                 }`}
               >
                 <span className="text-sm font-medium">{lang.label}</span>
-                {lang.dir === 'rtl' && <Badge variant="primary">RTL</Badge>}
+                {lang.dir === 'rtl' && <Badge variant="primary">{t('settings.rtl')}</Badge>}
               </button>
             ))}
           </div>
@@ -53,59 +80,26 @@ export default function SettingsPage() {
 
       <Card>
         <div className="px-6 py-4 border-b border-neutral-800 flex items-center gap-2">
-          <Server className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold">API Configuration</h2>
-        </div>
-        <CardBody className="space-y-4">
-          <Input
-            label="API Base URL"
-            id="api-url"
-            value={import.meta.env.VITE_API_URL || 'http://localhost:8000'}
-            disabled
-            hint="Set via VITE_API_URL environment variable"
-          />
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                try {
-                  const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/health`)
-                  if (res.ok) toast.success('API is healthy')
-                  else toast.error('API returned error')
-                } catch {
-                  toast.error('Cannot reach API server')
-                }
-              }}
-            >
-              Test Connection
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
-
-      <Card>
-        <div className="px-6 py-4 border-b border-neutral-800 flex items-center gap-2">
           <Shield className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold">Privacy & Security</h2>
+          <h2 className="text-lg font-semibold">{t('settings.privacy')}</h2>
         </div>
         <CardBody>
           <ul className="space-y-3 text-sm text-neutral-400">
             <li className="flex items-start gap-2">
-              <Badge variant="success">Active</Badge>
-              <span>Case files processed in memory, auto-deleted after 24 hours</span>
+              <Badge variant="success">{t('settings.active')}</Badge>
+              <span>{t('settings.privacy1')}</span>
             </li>
             <li className="flex items-start gap-2">
-              <Badge variant="success">Active</Badge>
-              <span>No logging of evidence content — only metadata is stored</span>
+              <Badge variant="success">{t('settings.active')}</Badge>
+              <span>{t('settings.privacy2')}</span>
             </li>
             <li className="flex items-start gap-2">
-              <Badge variant="success">Active</Badge>
-              <span>File type validation with magic bytes check</span>
+              <Badge variant="success">{t('settings.active')}</Badge>
+              <span>{t('settings.privacy3')}</span>
             </li>
             <li className="flex items-start gap-2">
-              <Badge variant="success">Active</Badge>
-              <span>Rate limiting: 10 requests/minute per IP</span>
+              <Badge variant="success">{t('settings.active')}</Badge>
+              <span>{t('settings.privacy4')}</span>
             </li>
           </ul>
         </CardBody>
@@ -114,25 +108,25 @@ export default function SettingsPage() {
       <Card>
         <div className="px-6 py-4 border-b border-neutral-800 flex items-center gap-2">
           <Info className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold">About</h2>
+          <h2 className="text-lg font-semibold">{t('settings.about')}</h2>
         </div>
         <CardBody>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-neutral-500">Version</p>
+              <p className="text-neutral-500">{t('settings.version')}</p>
               <p className="font-medium">1.0.0</p>
             </div>
             <div>
-              <p className="text-neutral-500">Status</p>
-              <Badge variant="primary">TRL 1 → TRL 4</Badge>
+              <p className="text-neutral-500">{t('settings.status')}</p>
+              <Badge variant="primary">{t('settings.trlStatus')}</Badge>
             </div>
             <div>
-              <p className="text-neutral-500">Legal Framework</p>
-              <p className="font-medium">Law No. 175/2018</p>
+              <p className="text-neutral-500">{t('settings.legalFramework')}</p>
+              <p className="font-medium">{t('settings.law175')}</p>
             </div>
             <div>
-              <p className="text-neutral-500">Pipeline</p>
-              <p className="font-medium">RAG + Multi-Agent AI</p>
+              <p className="text-neutral-500">{t('settings.pipeline')}</p>
+              <p className="font-medium">{t('settings.ragPipeline')}</p>
             </div>
           </div>
         </CardBody>

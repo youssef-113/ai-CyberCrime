@@ -6,6 +6,7 @@ import LandingPage from './pages/LandingPage'
 import DashboardPage from './pages/DashboardPage'
 import CaseAnalysisPage from './pages/CaseAnalysisPage'
 import ChatbotPage from './pages/ChatbotPage'
+import CaseHistoryPage from './pages/CaseHistoryPage'
 import SettingsPage from './pages/SettingsPage'
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/analyze" element={<CaseAnalysisPage />} />
               <Route path="/chatbot" element={<ChatbotPage />} />
+              <Route path="/history" element={<CaseHistoryPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Routes>

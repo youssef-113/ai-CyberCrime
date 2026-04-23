@@ -1,18 +1,22 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Search, LayoutDashboard, MessageSquare, Settings, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Home, Search, LayoutDashboard, MessageSquare, Settings, FileText, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
+import { getTranslation } from '../../utils/translations'
 import clsx from 'clsx'
 
 const navItems = [
-  { path: '/', icon: Home, label: 'Home' },
-  { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/analyze', icon: Search, label: 'New Case' },
-  { path: '/chatbot', icon: MessageSquare, label: 'Legal Chat' },
-  { path: '/settings', icon: Settings, label: 'Settings' },
+  { path: '/', icon: Home, labelKey: 'nav.home' },
+  { path: '/dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard' },
+  { path: '/analyze', icon: Search, labelKey: 'nav.newCase' },
+  { path: '/history', icon: FileText, labelKey: 'nav.caseHistory' },
+  { path: '/chatbot', icon: MessageSquare, labelKey: 'nav.legalChat' },
+  { path: '/settings', icon: Settings, labelKey: 'nav.settings' },
 ]
 
 export default function Sidebar() {
-  const { sidebarCollapsed, toggleSidebar, isRtl } = useTheme()
+  const { sidebarCollapsed, toggleSidebar, isRtl, language } = useTheme()
+  
+  const t = (key) => getTranslation(language, key)
 
   return (
     <aside
@@ -32,7 +36,7 @@ export default function Sidebar() {
         />
       </div>
       <nav className="flex-1 py-4 px-2 space-y-1">
-        {navItems.map(({ path, icon: Icon, label }) => (
+        {navItems.map(({ path, icon: Icon, labelKey }) => (
           <NavLink
             key={path}
             to={path}
@@ -47,7 +51,7 @@ export default function Sidebar() {
             }
           >
             <Icon className="w-5 h-5 shrink-0" />
-            {!sidebarCollapsed && <span>{label}</span>}
+            {!sidebarCollapsed && <span>{t(labelKey)}</span>}
           </NavLink>
         ))}
       </nav>

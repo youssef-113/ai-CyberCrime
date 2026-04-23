@@ -1,9 +1,12 @@
 export const CRIME_TYPES = {
   blackmail: { en: 'Blackmail', ar: 'ابتزاز', color: 'danger' },
   scam: { en: 'Financial Scam', ar: 'احتيال مالي', color: 'warning' },
+  fraud: { en: 'Fraud', ar: 'احتيال', color: 'warning' },
   threat: { en: 'Threat', ar: 'تهديد', color: 'danger' },
   defamation: { en: 'Defamation', ar: 'تشهير / قذف', color: 'warning' },
+  identity_theft: { en: 'Identity Theft', ar: 'سرقة الهوية', color: 'danger' },
   privacy_violation: { en: 'Privacy Violation', ar: 'انتهاك خصوصية', color: 'primary' },
+  phishing: { en: 'Phishing', ar: 'تصيد احتيالي', color: 'warning' },
   unknown: { en: 'Unknown', ar: 'غير محدد', color: 'neutral' },
 }
 

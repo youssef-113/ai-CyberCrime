@@ -1,0 +1,424 @@
+import { useTheme } from '../context/ThemeContext'
+
+export const translations = {
+  en: {
+    // Navigation
+    nav: {
+      home: 'Home',
+      dashboard: 'Dashboard',
+      newCase: 'New Case',
+      caseHistory: 'Case History',
+      legalChat: 'Legal Chat',
+      settings: 'Settings',
+    },
+
+    // Landing Page
+    landing: {
+      heroTitle: 'Transform Digital Evidence',
+      heroTitleHighlight: 'Into Legal Power',
+      heroSubtitle: 'AI-powered system that structures, verifies, and prepares legally supported complaint reports under Egyptian cybercrime law. Upload evidence. Get results.',
+      startNewCase: 'Start New Case',
+      viewDashboard: 'View Dashboard',
+      howItWorks: 'How It Works',
+      howItWorksSubtitle: 'Six-stage AI pipeline with zero-hallucination guarantees',
+      uploadEvidence: 'Upload Evidence',
+      uploadEvidenceDesc: 'Upload screenshots, images, and PDFs of digital crime evidence.',
+      aiAnalysis: 'AI Analysis',
+      aiAnalysisDesc: 'OCR extracts text, entities, and builds a chronological timeline automatically.',
+      legalRag: 'Legal RAG',
+      legalRagDesc: 'Retrieves relevant Egyptian law articles (Law 175/2018, Penal Code) via semantic search.',
+      multiAgent: 'Multi-Agent Verification',
+      multiAgentDesc: 'Attacker & Judge agents verify every claim against evidence — zero hallucination.',
+      pdfReport: 'PDF Report',
+      pdfReportDesc: 'Generates a ready-to-submit complaint report with timeline, articles, and score.',
+      legalChatbot: 'Legal Chatbot',
+      legalChatbotDesc: 'Ask questions about your case and get answers grounded in retrieved law articles.',
+      architectureTitle: 'Enterprise-Grade Architecture',
+      architectureDesc: 'Built on a microservices architecture with OCR processing, multi-agent verification, and RAG-powered legal retrieval. Every claim is traceable to evidence.',
+      zeroHallucination: 'Zero hallucination via multi-agent verification',
+      autoDeletion: '24-hour auto-deletion of sensitive evidence',
+      lawCoverage: 'Egyptian Law 175/2018 + Penal Code coverage',
+      readyToBuild: 'Ready to Build Your Case?',
+      readyToBuildDesc: 'Upload your evidence and let AI transform it into a structured, legally supported complaint report ready for submission to Egyptian authorities.',
+      getStarted: 'Get Started',
+      footer: 'Cybercrime AI — AI Cybercrime Evidence Builder',
+      footerLaw: 'Egyptian Law No. 175/2018 · Built for Digital Justice',
+    },
+
+    // Dashboard
+    dashboard: {
+      title: 'Dashboard',
+      subtitle: 'Overview of your case activity',
+      newCase: 'New Case',
+      totalCases: 'Total Cases',
+      strongEvidence: 'Strong Evidence',
+      needsReview: 'Needs Review',
+      avgScore: 'Avg Score',
+      recentCases: 'Recent Cases',
+      cases: 'cases',
+      noCases: 'No cases found',
+      usingDemoData: 'Using demo data. Backend API is not available.',
+    },
+
+    // Case Analysis
+    analysis: {
+      title: 'Case Analysis',
+      subtitle: 'Upload and analyze digital evidence',
+      uploadFiles: 'Upload Files',
+      uploadFilesDesc: 'Drag & drop files here or click to browse',
+      supportedFormats: 'Supported formats: PNG, JPG, JPEG, PDF',
+      maxFiles: 'Maximum 10 files, 10MB each',
+      analyze: 'Analyze Evidence',
+      analyzing: 'Analyzing...',
+      uploadProgress: 'Upload Progress',
+      processing: 'Processing',
+      results: 'Analysis Results',
+      caseId: 'Case ID',
+      crimeType: 'Crime Type',
+      confidence: 'Confidence',
+      score: 'Evidence Score',
+      grade: 'Grade',
+      verification: 'Verification Status',
+      articles: 'Relevant Law Articles',
+      timeline: 'Timeline',
+      downloadPdf: 'Download PDF Report',
+      startNewCase: 'Start New Case',
+      viewHistory: 'View Case History',
+      entities: 'Extracted Entities',
+      phones: 'Phone Numbers',
+      amounts: 'Amounts',
+      dates: 'Dates',
+      accounts: 'Accounts',
+      emails: 'Emails',
+      noEntities: 'No entities found',
+      verificationRounds: 'Verification Rounds',
+      attackerChallenge: 'Attacker Challenge',
+      judgeDecision: 'Judge Decision',
+      status: 'Status',
+    },
+
+    // Case History
+    history: {
+      title: 'Case History',
+      subtitle: 'View and manage all analyzed cases',
+      refresh: 'Refresh',
+      searchCases: 'Search cases...',
+      allStatus: 'All Status',
+      processing: 'Processing',
+      completed: 'Completed',
+      failed: 'Failed',
+      noCases: 'No cases found',
+      startNewCase: 'Start New Case',
+      view: 'View',
+      pdf: 'PDF',
+      created: 'Created',
+      filesProcessed: 'files processed',
+    },
+
+    // Chatbot
+    chatbot: {
+      title: 'Legal Chatbot',
+      subtitle: 'Egyptian Cybercrime Law Advisor',
+      clear: 'Clear',
+      welcome: 'Welcome to the Cybercrime AI Legal Chatbot. I can answer questions about Egyptian cybercrime law (Law 175/2018) and help you understand your case. What would you like to know?',
+      thinking: 'Thinking...',
+      placeholder: 'Ask about Egyptian cybercrime law...',
+      send: 'Send',
+    },
+
+    // Settings
+    settings: {
+      title: 'Settings',
+      subtitle: 'Configure your preferences',
+      language: 'Language',
+      languageDesc: 'Select your preferred language. Arabic enables RTL layout.',
+      privacy: 'Privacy & Security',
+      active: 'Active',
+      privacy1: 'Case files processed in memory, auto-deleted after 24 hours',
+      privacy2: 'No logging of evidence content — only metadata is stored',
+      privacy3: 'File type validation with magic bytes check',
+      privacy4: 'Rate limiting: 10 requests/minute per IP',
+      about: 'About',
+      version: 'Version',
+      status: 'Status',
+      legalFramework: 'Legal Framework',
+      pipeline: 'Pipeline',
+      trlStatus: 'TRL 1 → TRL 4',
+      law175: 'Law No. 175/2018',
+      ragPipeline: 'RAG + Multi-Agent AI',
+      rtl: 'RTL',
+    },
+
+    // Common
+    common: {
+      loading: 'Loading...',
+      error: 'Error',
+      success: 'Success',
+      cancel: 'Cancel',
+      save: 'Save',
+      delete: 'Delete',
+      edit: 'Edit',
+      close: 'Close',
+      back: 'Back',
+      next: 'Next',
+      previous: 'Previous',
+      submit: 'Submit',
+      search: 'Search',
+      filter: 'Filter',
+      sort: 'Sort',
+      view: 'View',
+      download: 'Download',
+      upload: 'Upload',
+      refresh: 'Refresh',
+      files: 'files',
+    },
+
+    // Crime Types
+    crimes: {
+      blackmail: 'Blackmail',
+      scam: 'Financial Scam',
+      fraud: 'Fraud',
+      threat: 'Threat',
+      defamation: 'Defamation',
+      identity_theft: 'Identity Theft',
+      privacy_violation: 'Privacy Violation',
+      phishing: 'Phishing',
+      unknown: 'Unknown',
+    },
+
+    // Grades
+    grades: {
+      STRONG: 'Strong',
+      MEDIUM: 'Medium',
+      WEAK: 'Weak',
+    },
+
+    // Verification Status
+    verification: {
+      APPROVED: 'Approved',
+      NEEDS_REVISION: 'Needs Revision',
+      NEEDS_USER_REVIEW: 'Needs User Review',
+    },
+  },
+
+  ar: {
+    // Navigation
+    nav: {
+      home: 'الرئيسية',
+      dashboard: 'لوحة التحكم',
+      newCase: 'قضية جديدة',
+      caseHistory: 'سجل القضايا',
+      legalChat: 'المحادثة القانونية',
+      settings: 'الإعدادات',
+    },
+
+    // Landing Page
+    landing: {
+      heroTitle: 'حوّل الأدلة الرقمية',
+      heroTitleHighlight: 'إلى قوة قانونية',
+      heroSubtitle: 'نظام ذكاء اصطناعي يقوم بتنظيم الأدلة والتحقق منها وإعداد تقارير شكاوى مدعومة قانونياً وفق قانون جرائم تقنية المعلومات المصري. ارفع الأدلة. احصل على النتائج.',
+      startNewCase: 'بدء قضية جديدة',
+      viewDashboard: 'عرض لوحة التحكم',
+      howItWorks: 'كيف يعمل',
+      howItWorksSubtitle: 'خطوة ذكاء اصطناعي بست مراحل مع ضمان عدم وجود معلومات خاطئة',
+      uploadEvidence: 'رفع الأدلة',
+      uploadEvidenceDesc: 'ارفع لقطات الشاشة والصور وملفات PDF لأدلة الجرائم الرقمية.',
+      aiAnalysis: 'تحليل الذكاء الاصطناعي',
+      aiAnalysisDesc: 'يستخرج OCR النص والكيانات ويبني جدولاً زمنياً تلقائياً.',
+      legalRag: 'الاسترجاع القانوني',
+      legalRagDesc: 'يسترجع مواد قانونية مصرية ذات صلة (قانون 175/2018، قانون العقوبات) عبر البحث الدلالي.',
+      multiAgent: 'التحقق متعدد الوكلاء',
+      multiAgentDesc: 'يتحقق وكلاء المهاجم والقاضي من كل ادعاء مقابل الأدلة — بدون معلومات خاطئة.',
+      pdfReport: 'تقرير PDF',
+      pdfReportDesc: 'ينشئ تقرير شكوى جاهز للتقديم مع الجدول الزمني والمواد والدرجة.',
+      legalChatbot: 'المحادثة القانونية',
+      legalChatbotDesc: 'اسأل عن قضيتك واحصل على إجابات مبنية على المواد القانونية المسترجعة.',
+      architectureTitle: 'بنية على مستوى المؤسسات',
+      architectureDesc: 'مبني على بنية الخدمات المصغرة مع معالجة OCR والتحقق متعدد الوكلاء والاسترجاع القانوني المدعوم بـ RAG. كل ادعاء قابل للتتبع إلى الأدلة.',
+      zeroHallucination: 'عدم وجود معلومات خاطئة عبر التحقق متعدد الوكلاء',
+      autoDeletion: 'حذف تلقائي للأدلة الحساسة بعد 24 ساعة',
+      lawCoverage: 'تغطية القانون المصري 175/2018 + قانون العقوبات',
+      readyToBuild: 'جاهز لبناء قضيتك؟',
+      readyToBuildDesc: 'ارفع أدلتك ودع الذكاء الاصطناعي يحولها إلى تقرير شكوى منظم ومدعوم قانونياً جاهز للتقديم للسلطات المصرية.',
+      getStarted: 'ابدأ الآن',
+      footer: 'الذكاء الاصطناعي للجرائم الإلكترونية — باني الأدلة للجرائم الإلكترونية',
+      footerLaw: 'القانون المصري رقم 175 لسنة 2018 · مبني للعدالة الرقمية',
+    },
+
+    // Dashboard
+    dashboard: {
+      title: 'لوحة التحكم',
+      subtitle: 'نظرة عامة على نشاط قضيتك',
+      newCase: 'قضية جديدة',
+      totalCases: 'إجمالي القضايا',
+      strongEvidence: 'أدلة قوية',
+      needsReview: 'تحتاج مراجعة',
+      avgScore: 'متوسط الدرجة',
+      recentCases: 'القضايا الأخيرة',
+      cases: 'قضايا',
+      noCases: 'لم يتم العثور على قضايا',
+      usingDemoData: 'استخدام بيانات تجريبية. واجهة برمجة التطبيقات غير متاحة.',
+    },
+
+    // Case Analysis
+    analysis: {
+      title: 'تحليل القضية',
+      subtitle: 'ارفع وحلل الأدلة الرقمية',
+      uploadFiles: 'رفع الملفات',
+      uploadFilesDesc: 'اسحب وأفلت الملفات هنا أو انقر للاستعراض',
+      supportedFormats: 'التنسيقات المدعومة: PNG, JPG, JPEG, PDF',
+      maxFiles: 'حد أقصى 10 ملفات، 10 ميجابايت لكل ملف',
+      analyze: 'تحليل الأدلة',
+      analyzing: 'جاري التحليل...',
+      uploadProgress: 'تقدم الرفع',
+      processing: 'جاري المعالجة',
+      results: 'نتائج التحليل',
+      caseId: 'رقم القضية',
+      crimeType: 'نوع الجريمة',
+      confidence: 'الثقة',
+      score: 'درجة الأدلة',
+      grade: 'الدرجة',
+      verification: 'حالة التحقق',
+      articles: 'المواد القانونية ذات الصلة',
+      timeline: 'الجدول الزمني',
+      downloadPdf: 'تحميل تقرير PDF',
+      startNewCase: 'بدء قضية جديدة',
+      viewHistory: 'عرض سجل القضايا',
+      entities: 'الكيانات المستخرجة',
+      phones: 'أرقام الهواتف',
+      amounts: 'المبالغ',
+      dates: 'التواريخ',
+      accounts: 'الحسابات',
+      emails: 'البريد الإلكتروني',
+      noEntities: 'لم يتم العثور على كيانات',
+      verificationRounds: 'جولات التحقق',
+      attackerChallenge: 'تحدي المهاجم',
+      judgeDecision: 'قرار القاضي',
+      status: 'الحالة',
+    },
+
+    // Case History
+    history: {
+      title: 'سجل القضايا',
+      subtitle: 'عرض وإدارة جميع القضايا المحللة',
+      refresh: 'تحديث',
+      searchCases: 'بحث القضايا...',
+      allStatus: 'جميع الحالات',
+      processing: 'جاري المعالجة',
+      completed: 'مكتمل',
+      failed: 'فشل',
+      noCases: 'لم يتم العثور على قضايا',
+      startNewCase: 'بدء قضية جديدة',
+      view: 'عرض',
+      pdf: 'PDF',
+      created: 'تم الإنشاء',
+      filesProcessed: 'ملفات معالجة',
+    },
+
+    // Chatbot
+    chatbot: {
+      title: 'المحادثة القانونية',
+      subtitle: 'مستشار قانون الجرائم الإلكترونية المصرية',
+      clear: 'مسح',
+      welcome: 'مرحباً بك في المحادثة القانونية للذكاء الاصطناعي للجرائم الإلكترونية. يمكنني الإجابة على أسئلة حول قانون الجرائم الإلكترونية المصري (قانون 175/2018) ومساعدتك في فهم قضيتك. ماذا تريد أن تعرف؟',
+      thinking: 'جاري التفكير...',
+      placeholder: 'اسأل عن قانون الجرائم الإلكترونية المصرية...',
+      send: 'إرسال',
+    },
+
+    // Settings
+    settings: {
+      title: 'الإعدادات',
+      subtitle: 'تكوين تفضيلاتك',
+      language: 'اللغة',
+      languageDesc: 'اختر لغتك المفضلة. العربية تفعّل التخطيط من اليمين لليسار.',
+      privacy: 'الخصوصية والأمان',
+      active: 'نشط',
+      privacy1: 'ملفات القضية تُعالج في الذاكرة، تُحذف تلقائياً بعد 24 ساعة',
+      privacy2: 'لا يتم تسجيل محتوى الأدلة — يتم تخزين البيانات الوصفية فقط',
+      privacy3: 'التحقق من نوع الملف باستخدام بايتات السحر',
+      privacy4: 'حد الطلبات: 10 طلبات في الدقيقة لكل عنوان IP',
+      about: 'حول',
+      version: 'الإصدار',
+      status: 'الحالة',
+      legalFramework: 'الإطار القانوني',
+      pipeline: 'خط الأنابيب',
+      trlStatus: 'TRL 1 → TRL 4',
+      law175: 'القانون رقم 175 لسنة 2018',
+      ragPipeline: 'RAG + الذكاء الاصطناعي متعدد الوكلاء',
+      rtl: 'RTL',
+    },
+
+    // Common
+    common: {
+      loading: 'جاري التحميل...',
+      error: 'خطأ',
+      success: 'نجح',
+      cancel: 'إلغاء',
+      save: 'حفظ',
+      delete: 'حذف',
+      edit: 'تعديل',
+      close: 'إغلاق',
+      back: 'رجوع',
+      next: 'التالي',
+      previous: 'السابق',
+      submit: 'إرسال',
+      search: 'بحث',
+      filter: 'تصفية',
+      sort: 'ترتيب',
+      view: 'عرض',
+      download: 'تحميل',
+      upload: 'رفع',
+      refresh: 'تحديث',
+      files: 'ملفات',
+    },
+
+    // Crime Types
+    crimes: {
+      blackmail: 'ابتزاز',
+      scam: 'احتيال مالي',
+      fraud: 'احتيال',
+      threat: 'تهديد',
+      defamation: 'تشهير / قذف',
+      identity_theft: 'سرقة الهوية',
+      privacy_violation: 'انتهاك خصوصية',
+      phishing: 'تصيد احتيالي',
+      unknown: 'غير محدد',
+    },
+
+    // Grades
+    grades: {
+      STRONG: 'قوي',
+      MEDIUM: 'متوسط',
+      WEAK: 'ضعيف',
+    },
+
+    // Verification Status
+    verification: {
+      APPROVED: 'موافق عليه',
+      NEEDS_REVISION: 'يحتاج مراجعة',
+      NEEDS_USER_REVIEW: 'يحتاج مراجعة المستخدم',
+    },
+  },
+}
+
+export function useTranslation() {
+  const { language } = useTheme()
+  return (key) => {
+    const keys = key.split('.')
+    let value = translations[language]
+    for (const k of keys) {
+      value = value?.[k]
+    }
+    return value || key
+  }
+}
+
+export function getTranslation(language, key) {
+  const keys = key.split('.')
+  let value = translations[language]
+  for (const k of keys) {
+    value = value?.[k]
+  }
+  return value || key
+}

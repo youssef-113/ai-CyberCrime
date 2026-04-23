@@ -6,13 +6,9 @@ import Input from '../components/ui/Input'
 import { Spinner } from '../components/ui/ProgressIndicator'
 import { useChat } from '../api/hooks'
 import { useCase } from '../context/CaseContext'
+import { useTheme } from '../context/ThemeContext'
+import { getTranslation } from '../utils/translations'
 import clsx from 'clsx'
-
-const WELCOME_MESSAGE = {
-  role: 'assistant',
-  content: 'Welcome to the Cybercrime AI Legal Chatbot. I can answer questions about Egyptian cybercrime law (Law 175/2018) and help you understand your case. What would you like to know?',
-  timestamp: new Date().toISOString(),
-}
 
 export default function ChatbotPage() {
   const { analysisResult } = useCase()
@@ -21,6 +17,15 @@ export default function ChatbotPage() {
   const [input, setInput] = useState('')
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+  const { language, isRtl } = useTheme()
+  
+  const t = (key) => getTranslation(language, key)
+
+  const WELCOME_MESSAGE = {
+    role: 'assistant',
+    content: t('chatbot.welcome'),
+    timestamp: new Date().toISOString(),
+  }
 
   const allMessages = [WELCOME_MESSAGE, ...messages]
 
@@ -38,20 +43,20 @@ export default function ChatbotPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
+    <div className="flex flex-col h-[calc(100vh-8rem)]" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
             <Scale className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="section-title text-lg">Legal Chatbot</h1>
-            <p className="text-xs text-neutral-500">Egyptian Cybercrime Law Advisor</p>
+            <h1 className="section-title text-lg">{t('chatbot.title')}</h1>
+            <p className="text-xs text-neutral-500">{t('chatbot.subtitle')}</p>
           </div>
         </div>
         <Button variant="ghost" size="sm" onClick={clearChat} className="gap-1.5">
           <Trash2 className="w-3.5 h-3.5" />
-          Clear
+          {t('chatbot.clear')}
         </Button>
       </div>
 
@@ -95,7 +100,7 @@ export default function ChatbotPage() {
               </div>
               <div className="chat-bubble-ai flex items-center gap-2">
                 <Spinner size="sm" />
-                <span className="text-sm text-neutral-400">Thinking...</span>
+                <span className="text-sm text-neutral-400">{t('chatbot.thinking')}</span>
               </div>
             </div>
           )}
@@ -115,7 +120,7 @@ export default function ChatbotPage() {
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about Egyptian cybercrime law..."
+              placeholder={t('chatbot.placeholder')}
               className="flex-1"
               disabled={loading}
             />

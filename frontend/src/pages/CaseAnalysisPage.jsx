@@ -9,9 +9,12 @@ import { useAnalyze, usePdfDownload } from '../api/hooks'
 import { validateFile, validateFileList } from '../utils/validators'
 import { formatFileSize, getGradeInfo, getCrimeTypeInfo, scoreToColor, scoreToBgColor } from '../utils/formatters'
 import { FILE_CONSTRAINTS, SCORE_WEIGHTS, VERIFICATION_STATUS } from '../utils/constants'
+import { useTheme } from '../context/ThemeContext'
+import { getTranslation } from '../utils/translations'
 import toast from 'react-hot-toast'
 
-const PIPELINE_STEPS = ['Upload', 'OCR', 'Classify', 'RAG', 'Verify', 'Score', 'PDF']
+const PIPELINE_STEPS_EN = ['Upload', 'OCR', 'Classify', 'RAG', 'Verify', 'Score', 'PDF']
+const PIPELINE_STEPS_AR = ['رفع', 'استخراج النص', 'تصنيف', 'استرجاع', 'تحقق', 'تقييم', 'تقرير']
 
 export default function CaseAnalysisPage() {
   const [files, setFiles] = useState([])
@@ -20,6 +23,10 @@ export default function CaseAnalysisPage() {
   const [result, setResult] = useState(null)
   const { analyze, loading, progress, error } = useAnalyze()
   const { download, loading: downloading } = usePdfDownload()
+  const { language, isRtl } = useTheme()
+  
+  const t = (key) => getTranslation(language, key)
+  const pipelineSteps = language === 'ar' ? PIPELINE_STEPS_AR : PIPELINE_STEPS_EN
 
   const handleDrag = useCallback((e) => {
     e.preventDefault()
@@ -116,10 +123,10 @@ export default function CaseAnalysisPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <div>
-        <h1 className="section-title">New Case Analysis</h1>
-        <p className="section-subtitle">Upload evidence and run the AI pipeline</p>
+        <h1 className="section-title">{t('analysis.title')}</h1>
+        <p className="section-subtitle">{t('analysis.subtitle')}</p>
       </div>
 
       {pipelineStep >= 0 && loading ? (
@@ -127,11 +134,11 @@ export default function CaseAnalysisPage() {
           <CardBody className="py-12">
             <div className="flex flex-col items-center gap-6">
               <Spinner size="lg" />
-              <PipelineProgress steps={PIPELINE_STEPS} currentStep={pipelineStep} className="w-full max-w-2xl" />
+              <PipelineProgress steps={pipelineSteps} currentStep={pipelineStep} className="w-full max-w-2xl" />
               <p className="text-neutral-400 text-sm">
-                Processing through {PIPELINE_STEPS[pipelineStep]} stage...
+                {t('analysis.processing')} {pipelineSteps[pipelineStep]}...
               </p>
-              <ProgressBar value={progress} label="Upload progress" className="w-full max-w-md" />
+              <ProgressBar value={progress} label={t('analysis.uploadProgress')} className="w-full max-w-md" />
             </div>
           </CardBody>
         </Card>
@@ -151,12 +158,12 @@ export default function CaseAnalysisPage() {
                 onDrop={handleDrop}
               >
                 <Upload className="w-12 h-12 mx-auto mb-3 text-primary" />
-                <p className="text-lg mb-1">Drag & drop your evidence files</p>
+                <p className="text-lg mb-1">{t('analysis.uploadFiles')}</p>
                 <p className="text-sm text-neutral-500 mb-4">
-                  PNG, JPG, PDF — max {FILE_CONSTRAINTS.MAX_SIZE_MB}MB each, up to {FILE_CONSTRAINTS.MAX_FILES} files
+                  {t('analysis.supportedFormats')} — max {FILE_CONSTRAINTS.MAX_SIZE_MB}MB each, up to {FILE_CONSTRAINTS.MAX_FILES} files
                 </p>
                 <label htmlFor="case-file-upload" className="btn-primary inline-block cursor-pointer">
-                  Select Files
+                  {t('analysis.uploadFiles')}
                 </label>
                 <input
                   id="case-file-upload"
@@ -173,8 +180,8 @@ export default function CaseAnalysisPage() {
           {files.length > 0 && (
             <Card>
               <div className="px-6 py-4 border-b border-neutral-800 flex items-center justify-between">
-                <h3 className="font-semibold">Uploaded Files ({files.length})</h3>
-                <Button variant="danger" size="sm" onClick={() => setFiles([])}>Clear All</Button>
+                <h3 className="font-semibold">{t('analysis.uploadFiles')} ({files.length})</h3>
+                <Button variant="danger" size="sm" onClick={() => setFiles([])}>{t('common.cancel')}</Button>
               </div>
               <div className="divide-y divide-neutral-800/50">
                 {files.map((file) => (
@@ -196,8 +203,8 @@ export default function CaseAnalysisPage() {
               </div>
               <div className="px-6 py-4 flex justify-end">
                 <Button onClick={handleAnalyze} className="gap-2">
-                  Analyze Evidence
-                  <ChevronRight className="w-4 h-4" />
+                  {t('analysis.analyze')}
+                  <ChevronRight className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
                 </Button>
               </div>
             </Card>
@@ -209,25 +216,28 @@ export default function CaseAnalysisPage() {
 }
 
 function ResultView({ result, onDownload, onReset, downloading }) {
+  const { language, isRtl } = useTheme()
+  const t = (key) => getTranslation(language, key)
+  
   const gradeInfo = getGradeInfo(result.score?.total_score || 0)
   const crimeInfo = getCrimeTypeInfo(result.classification?.crime_type || 'unknown')
   const verificationStatus = VERIFICATION_STATUS[result.verification?.status] || VERIFICATION_STATUS.NEEDS_USER_REVIEW
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="section-title">Analysis Results</h1>
-          <p className="section-subtitle">Case {result.case_id}</p>
+          <h1 className="section-title">{t('analysis.results')}</h1>
+          <p className="section-subtitle">{t('analysis.caseId')} {result.case_id}</p>
         </div>
         <div className="flex gap-3">
           <Button variant="outline" onClick={onReset} className="gap-2">
             <RotateCcw className="w-4 h-4" />
-            New Case
+            {t('analysis.startNewCase')}
           </Button>
           <Button onClick={onDownload} loading={downloading} className="gap-2">
             <Download className="w-4 h-4" />
-            Download PDF
+            {t('analysis.downloadPdf')}
           </Button>
         </div>
       </div>
@@ -238,15 +248,15 @@ function ResultView({ result, onDownload, onReset, downloading }) {
             <p className={`stat-value ${scoreToColor(result.score?.total_score || 0)}`}>
               {result.score?.total_score || 0}%
             </p>
-            <p className="stat-label">Evidence Strength</p>
-            <Badge variant={gradeInfo.color} className="mt-2">{gradeInfo.label}</Badge>
+            <p className="stat-label">{t('analysis.score')}</p>
+            <Badge variant={gradeInfo.color} className="mt-2">{language === 'ar' ? gradeInfo.labelAr : gradeInfo.label}</Badge>
           </CardBody>
         </Card>
         <Card>
           <CardBody className="text-center">
             <p className="stat-value text-primary">{Math.round((result.classification?.confidence || 0) * 100)}%</p>
-            <p className="stat-label">Classification Confidence</p>
-            <Badge variant={crimeInfo.color} className="mt-2">{crimeInfo.en}</Badge>
+            <p className="stat-label">{t('analysis.confidence')}</p>
+            <Badge variant={crimeInfo.color} className="mt-2">{language === 'ar' ? crimeInfo.ar : crimeInfo.en}</Badge>
           </CardBody>
         </Card>
         <Card>
@@ -259,8 +269,8 @@ function ResultView({ result, onDownload, onReset, downloading }) {
               )}
               <p className="stat-value">{result.verification?.rounds || 0}</p>
             </div>
-            <p className="stat-label">Verification Rounds</p>
-            <Badge variant={verificationStatus.color} className="mt-2">{verificationStatus.label}</Badge>
+            <p className="stat-label">{t('analysis.verificationRounds')}</p>
+            <Badge variant={verificationStatus.color} className="mt-2">{t(`verification.${result.verification?.status}`)}</Badge>
           </CardBody>
         </Card>
       </div>
@@ -268,20 +278,20 @@ function ResultView({ result, onDownload, onReset, downloading }) {
       {result.entities && (
         <Card>
           <div className="px-6 py-4 border-b border-neutral-800">
-            <h2 className="text-lg font-semibold">Extracted Entities</h2>
+            <h2 className="text-lg font-semibold">{t('analysis.entities')}</h2>
           </div>
           <CardBody>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { icon: Phone, label: 'Phone Numbers', items: result.entities.phones || [] },
-                { icon: DollarSign, label: 'Financial Amounts', items: result.entities.amounts || [] },
-                { icon: Clock, label: 'Dates', items: result.entities.dates || [] },
-                { icon: User, label: 'Accounts', items: result.entities.accounts || [] },
-              ].map(({ icon: Icon, label, items }) => (
-                <div key={label} className="bg-neutral-800/50 rounded-lg p-4">
+                { icon: Phone, labelKey: 'analysis.phones', items: result.entities.phones || [] },
+                { icon: DollarSign, labelKey: 'analysis.amounts', items: result.entities.amounts || [] },
+                { icon: Clock, labelKey: 'analysis.dates', items: result.entities.dates || [] },
+                { icon: User, labelKey: 'analysis.accounts', items: result.entities.accounts || [] },
+              ].map(({ icon: Icon, labelKey, items }) => (
+                <div key={labelKey} className="bg-neutral-800/50 rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Icon className="w-4 h-4 text-primary" />
-                    <span className="text-sm font-medium text-neutral-300">{label}</span>
+                    <span className="text-sm font-medium text-neutral-300">{t(labelKey)}</span>
                   </div>
                   {items.length > 0 ? (
                     <div className="space-y-1.5">
@@ -292,7 +302,7 @@ function ResultView({ result, onDownload, onReset, downloading }) {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-neutral-600">None detected</p>
+                    <p className="text-xs text-neutral-600">{t('analysis.noEntities')}</p>
                   )}
                 </div>
               ))}
@@ -305,20 +315,20 @@ function ResultView({ result, onDownload, onReset, downloading }) {
         <Card>
           <div className="px-6 py-4 border-b border-neutral-800 flex items-center gap-2">
             <Scale className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-semibold">Retrieved Law Articles</h2>
+            <h2 className="text-lg font-semibold">{t('analysis.articles')}</h2>
           </div>
           <CardBody className="space-y-3">
             {result.articles.map((article, i) => (
               <div key={i} className="legal-article-box">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-semibold text-primary">
-                    Article {article.article_number} — Law {article.law}
+                    {language === 'ar' ? 'المادة' : 'Article'} {article.article_number} — {language === 'ar' ? 'القانون' : 'Law'} {article.law}
                   </span>
                   <Badge variant="primary">{Math.round((1 - article.relevance_score) * 100)}% match</Badge>
                 </div>
                 <p className="text-sm text-neutral-300 mb-1">{article.text}</p>
                 {article.penalty_ar && (
-                  <p className="text-xs text-neutral-500">Penalty: {article.penalty_ar}</p>
+                  <p className="text-xs text-neutral-500">{language === 'ar' ? 'العقوبة:' : 'Penalty:'} {article.penalty_ar}</p>
                 )}
               </div>
             ))}
@@ -331,7 +341,7 @@ function ResultView({ result, onDownload, onReset, downloading }) {
           <CardBody>
             <div className="flex items-center gap-2 mb-3">
               <AlertCircle className="w-5 h-5 text-warning" />
-              <h3 className="font-semibold text-warning-light">Suggestions for Stronger Evidence</h3>
+              <h3 className="font-semibold text-warning-light">{t('analysis.suggestions')}</h3>
             </div>
             <ul className="space-y-1.5">
               {result.classification.missing_evidence.map((item, i) => (
@@ -348,14 +358,15 @@ function ResultView({ result, onDownload, onReset, downloading }) {
       {result.score?.breakdown && (
         <Card>
           <div className="px-6 py-4 border-b border-neutral-800">
-            <h2 className="text-lg font-semibold">Score Breakdown</h2>
+            <h2 className="text-lg font-semibold">{t('analysis.scoreBreakdown')}</h2>
           </div>
           <CardBody className="space-y-3">
             {Object.entries(SCORE_WEIGHTS).map(([key, { label, weight }]) => {
+              const labelKey = `analysis.${key.replace(/_/g, '')}`
               const earned = result.score.breakdown[key] || 0
               return (
                 <div key={key} className="flex items-center justify-between">
-                  <span className="text-sm text-neutral-300">{label}</span>
+                  <span className="text-sm text-neutral-300">{t(labelKey)}</span>
                   <div className="flex items-center gap-3">
                     <div className="w-32 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
                       <div

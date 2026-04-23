@@ -2,50 +2,56 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Shield, Upload, Cpu, Scale, FileText, MessageSquare, ArrowRight, CheckCircle } from 'lucide-react'
 import Button from '../components/ui/Button'
+import { useTheme } from '../context/ThemeContext'
+import { getTranslation } from '../utils/translations'
 
 const features = [
   {
     icon: Upload,
-    title: 'Upload Evidence',
-    description: 'Upload screenshots, images, and PDFs of digital crime evidence.',
+    titleKey: 'landing.uploadEvidence',
+    descriptionKey: 'landing.uploadEvidenceDesc',
   },
   {
     icon: Cpu,
-    title: 'AI Analysis',
-    description: 'OCR extracts text, entities, and builds a chronological timeline automatically.',
+    titleKey: 'landing.aiAnalysis',
+    descriptionKey: 'landing.aiAnalysisDesc',
   },
   {
     icon: Scale,
-    title: 'Legal RAG',
-    description: 'Retrieves relevant Egyptian law articles (Law 175/2018, Penal Code) via semantic search.',
+    titleKey: 'landing.legalRag',
+    descriptionKey: 'landing.legalRagDesc',
   },
   {
     icon: Shield,
-    title: 'Multi-Agent Verification',
-    description: 'Attacker & Judge agents verify every claim against evidence — zero hallucination.',
+    titleKey: 'landing.multiAgent',
+    descriptionKey: 'landing.multiAgentDesc',
   },
   {
     icon: FileText,
-    title: 'PDF Report',
-    description: 'Generates a ready-to-submit complaint report with timeline, articles, and score.',
+    titleKey: 'landing.pdfReport',
+    descriptionKey: 'landing.pdfReportDesc',
   },
   {
     icon: MessageSquare,
-    title: 'Legal Chatbot',
-    description: 'Ask questions about your case and get answers grounded in retrieved law articles.',
+    titleKey: 'landing.legalChatbot',
+    descriptionKey: 'landing.legalChatbotDesc',
   },
 ]
 
 const steps = [
-  { num: '01', label: 'Upload' },
-  { num: '02', label: 'Analyze' },
-  { num: '03', label: 'Verify' },
-  { num: '04', label: 'Report' },
+  { num: '01', labelKey: 'landing.uploadEvidence' },
+  { num: '02', labelKey: 'landing.aiAnalysis' },
+  { num: '03', labelKey: 'landing.multiAgent' },
+  { num: '04', labelKey: 'landing.pdfReport' },
 ]
 
 export default function LandingPage() {
+  const { language, isRtl } = useTheme()
+  
+  const t = (key) => getTranslation(language, key)
+
   return (
-    <div className="relative z-10">
+    <div className="relative z-10" dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Hero Section with Banner Image */}
       <section className="relative">
         {/* Background Banner Image */}
@@ -80,23 +86,22 @@ export default function LandingPage() {
             </motion.div>
 
             <h1 className="text-4xl md:text-6xl font-display font-bold mb-6 leading-tight">
-              Transform Digital Evidence{' '}
-              <span className="gradient-text">Into Legal Power</span>
+              {t('landing.heroTitle')}{' '}
+              <span className="gradient-text">{t('landing.heroTitleHighlight')}</span>
             </h1>
             <p className="text-lg md:text-xl text-neutral-300 max-w-2xl mb-8 leading-relaxed">
-              AI-powered system that structures, verifies, and prepares legally supported
-              complaint reports under Egyptian cybercrime law. Upload evidence. Get results.
+              {t('landing.heroSubtitle')}
             </p>
             <div className="flex flex-wrap gap-4">
               <Link to="/analyze">
                 <Button size="lg" className="gap-2">
-                  Start New Case
-                  <ArrowRight className="w-5 h-5" />
+                  {t('landing.startNewCase')}
+                  <ArrowRight className={`w-5 h-5 ${isRtl ? 'rotate-180' : ''}`} />
                 </Button>
               </Link>
               <Link to="/dashboard">
                 <Button variant="outline" size="lg">
-                  View Dashboard
+                  {t('landing.viewDashboard')}
                 </Button>
               </Link>
             </div>
@@ -117,7 +122,7 @@ export default function LandingPage() {
                 className="perspective-card-glass p-6 text-center backdrop-blur-sm"
               >
                 <span className="text-3xl font-display font-bold gradient-text">{step.num}</span>
-                <p className="text-sm text-neutral-400 mt-2">{step.label}</p>
+                <p className="text-sm text-neutral-400 mt-2">{t(step.labelKey)}</p>
               </motion.div>
             ))}
           </motion.div>
@@ -125,12 +130,12 @@ export default function LandingPage() {
       </section>
 
       <section className="container mx-auto px-6 py-16">
-        <h2 className="section-title mb-2">How It Works</h2>
-        <p className="section-subtitle mb-10">Six-stage AI pipeline with zero-hallucination guarantees</p>
+        <h2 className="section-title mb-2">{t('landing.howItWorks')}</h2>
+        <p className="section-subtitle mb-10">{t('landing.howItWorksSubtitle')}</p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((feature, i) => (
             <motion.div
-              key={feature.title}
+              key={feature.titleKey}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -138,8 +143,8 @@ export default function LandingPage() {
               className="perspective-card p-6"
             >
               <feature.icon className="w-10 h-10 text-primary mb-4" />
-              <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-              <p className="text-sm text-neutral-400 leading-relaxed">{feature.description}</p>
+              <h3 className="text-lg font-semibold mb-2">{t(feature.titleKey)}</h3>
+              <p className="text-sm text-neutral-400 leading-relaxed">{t(feature.descriptionKey)}</p>
             </motion.div>
           ))}
         </div>
@@ -151,24 +156,23 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
             <div className="p-8 md:p-12 flex flex-col justify-center">
               <h2 className="text-2xl md:text-3xl font-display font-bold mb-4">
-                Enterprise-Grade Architecture
+                {t('landing.architectureTitle')}
               </h2>
               <p className="text-neutral-400 mb-6 leading-relaxed">
-                Built on a microservices architecture with OCR processing, multi-agent verification,
-                and RAG-powered legal retrieval. Every claim is traceable to evidence.
+                {t('landing.architectureDesc')}
               </p>
               <ul className="space-y-3 text-sm text-neutral-300">
                 <li className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-primary shrink-0" />
-                  Zero hallucination via multi-agent verification
+                  {t('landing.zeroHallucination')}
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-primary shrink-0" />
-                  24-hour auto-deletion of sensitive evidence
+                  {t('landing.autoDeletion')}
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-primary shrink-0" />
-                  Egyptian Law 175/2018 + Penal Code coverage
+                  {t('landing.lawCoverage')}
                 </li>
               </ul>
             </div>
@@ -190,16 +194,15 @@ export default function LandingPage() {
           <div className="absolute inset-0 perspective-grid opacity-50" />
           <div className="relative">
             <h2 className="text-2xl md:text-3xl font-display font-bold mb-4">
-              Ready to Build Your Case?
+              {t('landing.readyToBuild')}
             </h2>
             <p className="text-neutral-400 max-w-xl mx-auto mb-8">
-              Upload your evidence and let AI transform it into a structured, legally supported
-              complaint report ready for submission to Egyptian authorities.
+              {t('landing.readyToBuildDesc')}
             </p>
             <Link to="/analyze">
               <Button size="lg" className="gap-2">
-                Get Started
-                <ArrowRight className="w-5 h-5" />
+                {t('landing.getStarted')}
+                <ArrowRight className={`w-5 h-5 ${isRtl ? 'rotate-180' : ''}`} />
               </Button>
             </Link>
           </div>
@@ -210,9 +213,9 @@ export default function LandingPage() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-neutral-500">
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-primary" />
-            <span>Cybercrime AI — AI Cybercrime Evidence Builder</span>
+            <span>{t('landing.footer')}</span>
           </div>
-          <p>Egyptian Law No. 175/2018 · Built for Digital Justice</p>
+          <p>{t('landing.footerLaw')}</p>
         </div>
       </footer>
     </div>

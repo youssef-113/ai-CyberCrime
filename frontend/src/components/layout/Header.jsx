@@ -1,11 +1,14 @@
 import { Link, useLocation } from 'react-router-dom'
 import { Globe, Menu } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
+import { getTranslation } from '../../utils/translations'
 import { motion } from 'framer-motion'
 
 export default function Header({ onMenuToggle }) {
   const { language, setLanguage, isRtl } = useTheme()
   const location = useLocation()
+  
+  const t = (key) => getTranslation(language, key)
 
   const isLanding = location.pathname === '/'
 

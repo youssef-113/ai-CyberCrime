@@ -80,7 +80,7 @@ export function usePdfDownload() {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `Cybercrime AI_Report_${caseId}.pdf`
+      link.download = `Cybercrime_AI_Report_${caseId}.pdf`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -95,4 +95,233 @@ export function usePdfDownload() {
   }, [])
 
   return { download, loading, error }
+}
+
+export function useCases() {
+  const [cases, setCases] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const fetchCases = useCallback(async (params = {}) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await endpoints.getCaseHistory(params)
+      setCases(Array.isArray(data) ? data : [])
+      return data
+    } catch (err) {
+      const message = err.response?.data?.detail || err.message || 'Failed to fetch cases'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const fetchCase = useCallback(async (caseId) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await endpoints.getCaseById(caseId)
+      return data
+    } catch (err) {
+      const message = err.response?.data?.detail || err.message || 'Failed to fetch case'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  return { cases, fetchCases, fetchCase, loading, error }
+}
+
+export function useHealthCheck() {
+  const [health, setHealth] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const checkHealth = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await endpoints.healthCheck()
+      setHealth(data)
+      return data
+    } catch (err) {
+      const message = err.response?.data?.detail || err.message || 'Health check failed'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  return { health, checkHealth, loading, error }
+}
+
+export function useChatHistory() {
+  const [history, setHistory] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const fetchHistory = useCallback(async (sessionId) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await endpoints.getChatHistory(sessionId)
+      setHistory(data)
+      return data
+    } catch (err) {
+      const message = err.response?.data?.detail || err.message || 'Failed to fetch chat history'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  return { history, fetchHistory, loading, error }
+}
+
+export function useSessions() {
+  const [sessions, setSessions] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const fetchSessions = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await endpoints.listSessions()
+      setSessions(data.sessions || [])
+      return data
+    } catch (err) {
+      const message = err.response?.data?.detail || err.message || 'Failed to fetch sessions'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  return { sessions, fetchSessions, loading, error }
+}
+
+export function useOcr() {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const extract = useCallback(async (file) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await endpoints.extractText(file)
+      return data
+    } catch (err) {
+      const message = err.response?.data?.detail || err.message || 'OCR extraction failed'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  return { extract, loading, error }
+}
+
+export function useClassification() {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const classify = useCallback(async (text, entities) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await endpoints.classifyCrime(text, entities)
+      return data
+    } catch (err) {
+      const message = err.response?.data?.detail || err.message || 'Classification failed'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  return { classify, loading, error }
+}
+
+export function useRag() {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const retrieve = useCallback(async (query, crimeType, topK = 5) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await endpoints.retrieveArticles(query, crimeType, topK)
+      return data
+    } catch (err) {
+      const message = err.response?.data?.detail || err.message || 'Article retrieval failed'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  return { retrieve, loading, error }
+}
+
+export function useVerification() {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const verify = useCallback(async (evidenceText, entities, classification, articles) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await endpoints.verifyEvidence(evidenceText, entities, classification, articles)
+      return data
+    } catch (err) {
+      const message = err.response?.data?.detail || err.message || 'Verification failed'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  return { verify, loading, error }
+}
+
+export function usePdfGeneration() {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const generate = useCallback(async (caseData) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const blob = await endpoints.generatePdf(caseData)
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `complaint_${caseData.case_id}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      return blob
+    } catch (err) {
+      const message = err.response?.data?.detail || err.message || 'PDF generation failed'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  return { generate, loading, error }
 }
