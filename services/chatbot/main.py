@@ -19,8 +19,26 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-from models.pydantic_models import ChatRequest, ChatResponse, HealthResponse
+
+# ── Pydantic Models ────────────────────────────────────────────────────────────
+
+class ChatRequest(BaseModel):
+    session_id: str
+    user_message: str
+    case_context: Optional[dict] = None
+    language: str = "ar"  # "ar" for Arabic, "en" for English
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    session_id: str
+    citations: List[str]
+
+
+class HealthResponse(BaseModel):
+    status: str
+    service: str
+    version: str
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [CHATBOT] %(message)s")
 logger = logging.getLogger("chatbot")
@@ -34,7 +52,7 @@ LLM_MODEL         = os.getenv("LLM_MODEL", "claude-sonnet-4-6")
 MAX_HISTORY_TURNS = int(os.getenv("MAX_CHAT_HISTORY", "20"))
 MAX_TOKENS        = int(os.getenv("MAX_CHAT_TOKENS", "800"))
 
-# ── Crime type Arabic labels ──────────────────────────────────────────────────
+# ── Crime type labels ───────────────────────────────────────────────────────
 CRIME_TYPE_AR = {
     "blackmail":      "ابتزاز إلكتروني",
     "scam":           "احتيال مالي إلكتروني",
@@ -46,10 +64,27 @@ CRIME_TYPE_AR = {
     "unknown":        "جريمة إلكترونية",
 }
 
+CRIME_TYPE_EN = {
+    "blackmail":      "Electronic Blackmail",
+    "scam":           "Electronic Financial Scam",
+    "threat":         "Electronic Threat",
+    "defamation":     "Electronic Defamation and Libel",
+    "privacy":        "Electronic Privacy Violation",
+    "identity_theft": "Electronic Identity Theft",
+    "general":        "Cybercrime",
+    "unknown":        "Cybercrime",
+}
+
 SCORE_GRADE_AR = {
     "STRONG": "قوية",
     "MEDIUM": "متوسطة",
     "WEAK":   "ضعيفة",
+}
+
+SCORE_GRADE_EN = {
+    "STRONG": "Strong",
+    "MEDIUM": "Medium",
+    "WEAK":   "Weak",
 }
 
 # ── In-memory session store ───────────────────────────────────────────────────
@@ -141,31 +176,88 @@ def build_system_prompt(case_context: Optional[dict]) -> str:
     return prompt
 
 
+def build_system_prompt_en(case_context: Optional[dict]) -> str:
+    """
+    Build the legal chatbot system prompt with injected case context (English version).
+    The prompt enforces:
+    1. English-only responses
+    2. Citation of actual retrieved articles (not invented ones)
+    3. Compassionate tone appropriate for crime victims
+    4. Referral to Cybercrime Investigation hotline 108
+    """
+    if not case_context:
+        # Generic mode — no specific case
+        return """You are a legal advisor specializing in Egyptian cybercrime cases.
+Always answer in English and cite articles from the Anti-Cybercrime Law No. 175 of 2018.
+Be supportive and empathetic. Refer users to the Cybercrime Investigation hotline at 108 when appropriate."""
+
+    crime_type = case_context.get("crime_type", "unknown")
+    crime_type_en = CRIME_TYPE_EN.get(crime_type, "Cybercrime")
+    score_data = case_context.get("score", {})
+    score_total = score_data.get("total_score", 0)
+    grade = score_data.get("grade", "WEAK")
+    grade_en = SCORE_GRADE_EN.get(grade, "")
+
+    # Build claims summary
+    claims = case_context.get("claims", [])
+    claims_text = "\n".join(
+        f"- {c.get('claim', '') if isinstance(c, dict) else c.claim}"
+        for c in claims[:5]
+    ) if claims else "No specific claims verified yet."
+
+    # Build articles reference — the ONLY articles the chatbot may cite
+    articles = case_context.get("articles", [])
+    articles_text = ""
+    if articles:
+        for art in articles:
+            if isinstance(art, dict):
+                art_id = art.get("article_id", "")
+                art_num = art.get("article_number", "")
+                law = art.get("law", "")
+                text_preview = (art.get("text_en", "") or art.get("text_ar", "") or "")[:200]
+                penalty = art.get("penalty_en", "") or art.get("penalty_ar", "")
+                articles_text += f"\n• Article {art_num} — {law} Law [{art_id}]\n  {text_preview}\n  Penalty: {penalty}\n"
+    else:
+        articles_text = "No legal articles have been retrieved for this case yet."
+
+    # Build entities summary for context
+    entities = case_context.get("entities", {})
+    phones = entities.get("phones", [])
+    amounts = entities.get("amounts", [])
+
+    prompt = f"""You are a legal advisor specializing in Egyptian cybercrime cases.
+You help a cybercrime victim understand their rights and legal options.
+
+══ Current Case Context ══
+Case ID: {case_context.get("case_id", "Not specified")}
+Crime Type: {crime_type_en}
+Evidence Strength: {score_total}% — {grade_en}
+Number of Evidence Files: {len(case_context.get("evidence_blocks", []))}
+
+Verified Claims:
+{claims_text}
+
+{'Tracked Phone Numbers: ' + ', '.join(phones) if phones else ''}
+{'Tracked Financial Amounts: ' + ', '.join(amounts) if amounts else ''}
+
+══ Legal Articles You Are Permitted to Cite Only ══
+{articles_text}
+
+══ Strict Rules You Must Follow ══
+1. Always answer in formal English — even if the question is in informal language.
+2. For every legal statement, cite using the format: "Pursuant to Article X of Law Y of Year Z..."
+3. Do not cite any article not listed above.
+4. If asked about an article or law not listed above, answer:
+   "This question requires consultation with a lawyer specializing in cybercrime."
+5. Do not invent article numbers, penalties, or prison terms not listed above.
+6. Be supportive and empathetic — this person has been through a difficult experience.
+7. End every answer by reminding them they can contact the Cybercrime Investigation hotline at 108.
+8. Do not request additional personal information from the user."""
+
+    return prompt
+
+
 # ── LLM callers ───────────────────────────────────────────────────────────────
-
-def call_claude(system: str, history: List[dict], user_message: str) -> str:
-    """Call Claude Sonnet API with full conversation history."""
-    try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
-        messages = list(history[-MAX_HISTORY_TURNS:])  # Keep last N turns
-        messages.append({"role": "user", "content": user_message})
-
-        resp = client.messages.create(
-            model=LLM_MODEL,
-            system=system,
-            messages=messages,
-            max_tokens=MAX_TOKENS,
-        )
-        return resp.content[0].text
-
-    except ImportError:
-        logger.warning("anthropic not installed")
-        return None
-    except Exception as e:
-        logger.error(f"Claude error: {e}")
-        return None
 
 
 def call_gemini(system: str, history: List[dict], user_message: str) -> str:
@@ -267,6 +359,74 @@ def rule_based_reply(user_message: str, case_context: Optional[dict]) -> str:
     )
 
 
+def rule_based_reply_en(user_message: str, case_context: Optional[dict]) -> str:
+    """
+    Rule-based fallback replies for common legal questions (English version).
+    Used when no LLM API key is available.
+    Pulls from the actual retrieved articles in case_context.
+    """
+    msg_lower = user_message.lower()
+
+    # Get articles from context for grounded answers
+    articles = (case_context or {}).get("articles", [])
+    crime_type = (case_context or {}).get("crime_type", "unknown")
+
+    # Categorize question
+    is_penalty_q    = any(w in msg_lower for w in ["penalty", "punishment", "jail", "prison", "fine", "sentence"])
+    is_report_q     = any(w in msg_lower for w in ["report", "file", "complaint", "police", "where", "how"])
+    is_rights_q     = any(w in msg_lower for w in ["rights", "right", "can i", "allowed", "possible"])
+    is_duration_q   = any(w in msg_lower for w in ["duration", "time", "long", "how long"])
+    is_anon_q       = any(w in msg_lower for w in ["anonymous", "identity", "name", "know"])
+
+    if is_report_q:
+        return (
+            "To report the cybercrime, you can contact the Cybercrime Investigation "
+            "Department through the following methods:\n"
+            "• Hotline: **108** (available 24 hours)\n"
+            "• WhatsApp: **0224065052**\n"
+            "• Official website: **moi.gov.eg**\n"
+            "• Nearest police station with a copy of this report."
+        )
+
+    if is_penalty_q and articles:
+        # Pull penalty from first article
+        art = articles[0]
+        if isinstance(art, dict):
+            penalty = art.get("penalty_en", "") or art.get("penalty_ar", "")
+            art_num = art.get("article_number", "")
+            law = art.get("law", "")
+            if penalty:
+                return (
+                    f"Pursuant to Article {art_num} of {law} Law, "
+                    f"the prescribed penalty is: {penalty}. "
+                    "For more details, contact the Cybercrime Investigation hotline at 108."
+                )
+
+    if is_anon_q:
+        return (
+            "You can file the report with your personal information, and you have the right "
+            "to confidentiality before judicial authorities. For specific details about "
+            "confidentiality in your case, consult the Cybercrime Investigation hotline at 108."
+        )
+
+    if is_duration_q:
+        return (
+            "The duration of a case varies depending on its nature and complexity. "
+            "Investigations typically begin within days of filing the report. "
+            "For specific information about your case, contact the Cybercrime Investigation hotline at 108."
+        )
+
+    # Generic fallback
+    crime_en = CRIME_TYPE_EN.get(crime_type, "cybercrime")
+    return (
+        f"Your question relates to a {crime_en} case. "
+        "For an accurate and reliable answer about your case, it is recommended to:\n"
+        "1. Contact the Cybercrime Investigation hotline at **108**\n"
+        "2. Consult a lawyer specializing in cybercrime\n"
+        "3. Submit this report to the nearest police station."
+    )
+
+
 # ── Citation extractor ────────────────────────────────────────────────────────
 
 def extract_cited_articles(reply: str, case_context: Optional[dict]) -> List[str]:
@@ -331,25 +491,37 @@ def chat(
     session_id: str,
     user_message: str,
     case_context: Optional[dict] = None,
+    language: str = "ar",
 ) -> tuple[str, List[str]]:
     """
     Main chat function.
     Returns (reply_text, cited_article_ids).
+
+    Args:
+        session_id: Unique session identifier
+        user_message: User's question
+        case_context: Optional case data for context
+        language: "ar" for Arabic, "en" for English
     """
     session = get_session(session_id)
 
     # Use provided context or fall back to stored context
     ctx = case_context or session.get("case_context")
 
-    # Build system prompt with case context
-    system = build_system_prompt(ctx)
+    # Build system prompt with case context based on language
+    if language == "en":
+        system = build_system_prompt_en(ctx)
+        rule_based_fn = rule_based_reply_en
+    else:
+        system = build_system_prompt(ctx)
+        rule_based_fn = rule_based_reply
 
     # Get conversation history
     history = session["history"]
 
     logger.info(
         f"[{session_id}] message #{session.get('message_count',0)+1} "
-        f"| len={len(user_message)} | history={len(history)//2} turns"
+        f"| len={len(user_message)} | history={len(history)//2} turns | lang={language}"
     )
 
     # Try LLMs in order
@@ -360,8 +532,8 @@ def chat(
     if reply is None and GEMINI_API_KEY:
         reply = call_gemini(system, history, user_message)
     if reply is None:
-        logger.info(f"[{session_id}] Using rule-based fallback")
-        reply = rule_based_reply(user_message, ctx)
+        logger.info(f"[{session_id}] Using rule-based fallback ({language})")
+        reply = rule_based_fn(user_message, ctx)
 
     # Extract cited articles
     citations = extract_cited_articles(reply, ctx)
@@ -396,19 +568,20 @@ async def chat_endpoint(request: ChatRequest):
     Input:
     {
       "session_id": "CASE_ABC123",
-      "user_message": "ايه هيحصل للشخص اللي بتزني؟",
+      "user_message": "What happens to the person who blackmails?",
+      "language": "en",
       "case_context": { ...full case_data from /analyze/json... }
     }
 
     Output:
     {
-      "reply": "بموجب المادة 26 من القانون 175 لسنة 2018...",
+      "reply": "Pursuant to Article 26 of Law 175 of 2018...",
       "session_id": "CASE_ABC123",
       "citations": ["law175_art26"]
     }
 
     Guarantees:
-    - Answers in formal Arabic
+    - Answers in formal Arabic or English (based on language parameter)
     - Only cites articles from retrieved law list (no invented articles)
     - Maintains full conversation history within session
     - Compassionate tone for crime victims
@@ -420,11 +593,15 @@ async def chat_endpoint(request: ChatRequest):
     if len(request.user_message) > 2000:
         raise HTTPException(400, detail="user_message too long (max 2000 chars)")
 
+    if request.language not in ["ar", "en"]:
+        raise HTTPException(400, detail="language must be 'ar' or 'en'")
+
     t0 = time.time()
     reply, citations = chat(
         session_id=request.session_id,
         user_message=request.user_message,
         case_context=request.case_context,
+        language=request.language,
     )
     elapsed = round(time.time() - t0, 2)
     logger.info(f"Chat completed in {elapsed}s")
