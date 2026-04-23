@@ -46,33 +46,6 @@ conda --version
 3. Check "Add Miniconda3 to my PATH" during installation
 4. Open new Command Prompt and verify: `conda --version`
 
-### Option B: Install Anaconda (Full Distribution)
-
-**Linux:**
-```bash
-wget https://repo.anaconda.com/archive/Anaconda3-2024.02-1-Linux-x86_64.sh
-bash Anaconda3-2024.02-1-Linux-x86_64.sh
-source ~/.bashrc
-conda --version
-```
-
-**macOS:**
-```bash
-# Intel Mac
-wget https://repo.anaconda.com/archive/Anaconda3-2024.02-1-MacOSX-x86_64.sh
-
-# M1/M2 Mac (Apple Silicon)
-wget https://repo.anaconda.com/archive/Anaconda3-2024.02-1-MacOSX-arm64.sh
-
-bash Anaconda3-2024.02-1-MacOSX-*.sh
-source ~/.zshrc  # or ~/.bash_profile
-conda --version
-```
-
-**Windows:**
-Download from: https://www.anaconda.com/download
-
----
 
 ## 1. Clone Repository
 
@@ -151,12 +124,10 @@ vim .env
 
 **Required in `.env`:**
 ```env
-# Get your API key from: https://console.anthropic.com/
-LLM_API_KEY=sk-ant-your-actual-key-here
-LLM_MODEL=claude-3-haiku-20240307
+# your API key from: LLM_API_KEY=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
 
-# Optional: OpenAI alternative
-# OPENAI_API_KEY=sk-your-openai-key
+LLM_MODEL=llama-3.1-70b-versatile 
+
 ```
 
 ---
@@ -188,14 +159,6 @@ sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plug
 # Verify
 docker --version
 docker compose version
-```
-
-**macOS:**
-```bash
-# Using Homebrew
-brew install --cask docker
-
-# Or download from: https://docs.docker.com/desktop/install/mac-install/
 ```
 
 **Windows:**
@@ -313,82 +276,9 @@ npm run preview
 
 ---
 
-## 9. Quick Start Script
 
-Save as `start-all.sh` in project root:
 
-```bash
-#!/bin/bash
-
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-echo -e "${YELLOW}Starting all services...${NC}"
-
-# Activate conda
-source ~/miniconda3/etc/profile.d/conda.sh  # Adjust path if needed
-conda activate cybercrime
-
-# Function to start service
-start_service() {
-    local name=$1
-    local dir=$2
-    local port=$3
-    
-    echo -e "${GREEN}Starting $name on port $port...${NC}"
-    cd "$dir" && uvicorn main:app --host 0.0.0.0 --port "$port" --reload &
-}
-
-# Start all services
-start_service "API Gateway" "services/api" "8000"
-start_service "OCR" "services/ocr" "8001"
-start_service "Classifier" "services/classifier" "8002"
-start_service "RAG" "services/rag" "8003"
-start_service "Verification" "services/verification" "8004"
-start_service "PDF Gen" "services/pdf_gen" "8005"
-
-sleep 3
-
-echo ""
-echo -e "${GREEN}All services started!${NC}"
-echo ""
-echo "Service URLs:"
-echo "  API Gateway:   http://localhost:8000"
-echo "  OCR:           http://localhost:8001"
-echo "  Classifier:    http://localhost:8002"
-echo "  RAG:           http://localhost:8003"
-echo "  Verification:  http://localhost:8004"
-echo "  PDF Gen:       http://localhost:8005"
-echo ""
-echo "To stop all services: pkill -f uvicorn"
-```
-
-Make executable and run:
-```bash
-chmod +x start-all.sh
-./start-all.sh
-```
-
----
-
-## 10. Index Law Articles (For RAG)
-
-```bash
-# Activate environment
-conda activate cybercrime
-
-# Index Egyptian law articles into ChromaDB
-python scripts/index_law.py
-
-# Verify citations
-python scripts/validate_citations.py --query "ابتزاز"
-```
-
----
-
-## 11. Test Everything Works
+## 9. Test Everything Works
 
 ### Health Checks
 ```bash
@@ -410,83 +300,6 @@ curl http://localhost:6333/healthz # Qdrant
 ```bash
 pip install pytest pytest-asyncio httpx
 python scripts/test-end-to-end.py
-```
-
----
-
-## 🎯 Quick Start (Complete Flow)
-
-```bash
-# 1. Clone & enter repo
-git clone https://github.com/youssef-113/ai-CyberCrime.git
-cd ai-CyberCrime
-
-# 2. Install conda (if needed) - see Step 0 above
-
-# 3. Create environment
-conda create -n cybercrime python=3.11 -y
-conda activate cybercrime
-
-# 4. Setup environment variables
-cp .env.example .env
-# Edit .env with your LLM_API_KEY
-
-# 5. OPTION A: Docker (Easiest - runs everything)
-docker-compose up --build
-
-# 5. OPTION B: Local development (faster iteration)
-# Install all dependencies
-for req in services/*/requirements.txt; do pip install -r "$req"; done
-
-# Start services
-./start-all.sh
-
-# 6. Start frontend (in new terminal)
-cd frontend && npm install && npm run dev
-
-# 7. Open browser
-# Frontend: http://localhost:3000
-# API:      http://localhost:8000/docs
-```
-
----
-
-## Troubleshooting
-
-### Port Already in Use
-```bash
-# Find process using port 8000
-sudo lsof -i :8000
-
-# Kill it
-kill -9 <PID>
-```
-
-### Docker Permission Denied (Linux)
-```bash
-# Add user to docker group
-sudo usermod -aG docker $USER
-
-# Log out and back in, then:
-docker-compose up --build
-```
-
-### Conda Environment Not Found
-```bash
-# List all environments
-conda env list
-
-# If 'cybercrime' not found, recreate:
-conda create -n cybercrime python=3.11 -y
-```
-
-### LLM API Key Not Working
-```bash
-# Test your key
-curl -X POST https://api.anthropic.com/v1/messages \
-  -H "x-api-key: $LLM_API_KEY" \
-  -H "anthropic-version: 2023-06-01" \
-  -d '{"model":"claude-3-haiku-20240307","max_tokens":100,"messages":[{"role":"user","content":"Hi"}]}'
 ```
 
 ---
@@ -537,12 +350,3 @@ curl -X POST https://api.anthropic.com/v1/messages \
 | Install | `npm install` |
 | Dev | `npm run dev` |
 | Build | `npm run build` |
-
----
-
-## Need Help?
-
-1. Check service logs: `docker-compose logs -f [service-name]`
-2. Run health check: `./scripts/verify-all.sh`
-3. Test individual service: `curl http://localhost:PORT/health`
-4. Review error messages in terminal output

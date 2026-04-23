@@ -73,9 +73,9 @@ export default function LandingPage() {
               className="mb-8"
             >
               <img
-                src="/images/Gemini_Generated_Image_ei8n0xei8n0xei8n.png"
+                src="/images/a-cinematic-high-tech-startup-poster-fea_LgTTcXLOTAuD74ES1Dq5mA_TGuuJNbMRGusz7UyZ_TJnw.jpeg"
                 alt="Cybercrime AI Logo"
-                className="w-24 h-24 object-contain rounded-xl shadow-glow"
+                className="w-24 h-24 object-cover rounded-xl shadow-glow"
               />
             </motion.div>
 
@@ -172,9 +172,9 @@ export default function LandingPage() {
                 </li>
               </ul>
             </div>
-            <div className="relative h-64 lg:h-auto">
+            <div className="relative h-110 lg:h-auto min-h-[500px]">
               <img
-                src="/images/a-sleek-corporate-poster-design-featurin_FOcW4B5jRbKDVIj4LNrtYw_ng88QlxlTCCU7uzM4BL7Fg.jpeg"
+                src="/images/a-sleek-corporate-poster-design-featurin_FOcW3B5jRbKDVIj4LNrtYw_ng88QlxlTCCU7uzM4BL7Fg.jpeg"
                 alt="Cybercrime AI Architecture"
                 className="absolute inset-0 w-full h-full object-cover"
               />

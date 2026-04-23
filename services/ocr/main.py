@@ -1,5 +1,5 @@
 """OCR Service - Stage 2: OCR & Entity Extraction"""
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Optional
@@ -45,37 +45,48 @@ def health():
 
 @app.post("/extract", response_model=OCRResponse)
 async def extract(file: UploadFile = File(...)):
-    """Extract text and entities from image/PDF"""
-    
-    # Save uploaded file temporarily
-    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
-    
+    """Extract text and entities from image/PDF/text"""
+
+    content = await file.read()
+    tmp_path = None
+
     try:
-        # Perform OCR
-        results = reader.readtext(tmp_path)
-        
-        # Extract text
-        full_text = " ".join([r[1] for r in results])
-        avg_confidence = sum([r[2] for r in results]) / len(results) if results else 0
-        
+        # Handle text files directly
+        if file.filename.endswith('.txt'):
+            full_text = content.decode('utf-8', errors='ignore')
+            avg_confidence = 1.0
+        else:
+            # Save uploaded file temporarily for OCR
+            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+
+            # Perform OCR
+            results = reader.readtext(tmp_path)
+
+            # Extract text
+            full_text = " ".join([r[1] for r in results])
+            avg_confidence = sum([r[2] for r in results]) / len(results) if results else 0
+
         # Extract entities
         entities = extract_entities(full_text)
-        
+
         # Detect language
         lang = "ar" if any('\u0600' <= c <= '\u06FF' for c in full_text) else "en"
-        
+
         return OCRResponse(
             text=full_text,
             entities=entities,
             confidence=round(avg_confidence, 2),
             language=lang
         )
-        
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OCR processing failed: {str(e)}")
+
     finally:
-        os.unlink(tmp_path)
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 def extract_entities(text: str) -> Dict[str, List[ExtractedEntity]]:
     """Extract structured entities from text"""

@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Shield, Globe, Menu } from 'lucide-react'
+import { Globe, Menu } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { motion } from 'framer-motion'
 
@@ -23,12 +23,13 @@ export default function Header({ onMenuToggle }) {
             </button>
           )}
           <Link to="/" className="flex items-center gap-2.5 group">
-            <motion.div
+            <motion.img
+              src="/images/a-cinematic-high-tech-startup-poster-fea_LgTTcXLOTAuD74ES1Dq5mA_TGuuJNbMRGusz7UyZ_TJnw.jpeg"
+              alt="Cybercrime AI Logo"
+              className="w-10 h-10 rounded-lg object-cover"
               whileHover={{ rotate: 10 }}
               transition={{ type: 'spring', stiffness: 300 }}
-            >
-              <Shield className="w-8 h-8 text-primary" />
-            </motion.div>
+            />
             <span className="text-lg font-display font-bold gradient-text hidden sm:inline">
               Cybercrime AI
             </span>

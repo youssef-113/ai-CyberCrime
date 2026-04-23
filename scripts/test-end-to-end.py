@@ -164,7 +164,7 @@ async def test_full_pipeline():
             
             if resp.status_code == 200:
                 data = resp.json()
-                if data.get("status") == "healthy":
+                if data.get("gateway") == "healthy" or data.get("status") == "healthy":
                     log_success("API Gateway orchestrator healthy")
                 else:
                     log_fail("API Gateway: Unhealthy status")

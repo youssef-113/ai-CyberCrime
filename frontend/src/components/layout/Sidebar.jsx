@@ -21,6 +21,16 @@ export default function Sidebar() {
         sidebarCollapsed ? 'w-16' : 'w-56'
       )}
     >
+      <div className="p-3 border-b border-neutral-800/50">
+        <img
+          src="/images/a-cinematic-high-tech-startup-poster-fea_LgTTcXLOTAuD74ES1Dq5mA_TGuuJNbMRGusz7UyZ_TJnw.jpeg"
+          alt="Cybercrime AI Logo"
+          className={clsx(
+            'rounded-lg object-cover mx-auto',
+            sidebarCollapsed ? 'w-10 h-10' : 'w-12 h-12'
+          )}
+        />
+      </div>
       <nav className="flex-1 py-4 px-2 space-y-1">
         {navItems.map(({ path, icon: Icon, label }) => (
           <NavLink

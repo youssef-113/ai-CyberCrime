@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import chromadb
 from chromadb.utils import embedding_functions
 import os
@@ -16,8 +16,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize ChromaDB
-chroma_client = chromadb.PersistentClient(path="/data/law_db")
+# Initialize ChromaDB (use environment variable or local path)
+import os
+data_path = os.getenv("CHROMA_DATA_PATH", "./data/law_db")
+chroma_client = chromadb.PersistentClient(path=data_path)
 
 default_ef = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name="all-MiniLM-L6-v2"

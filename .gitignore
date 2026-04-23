@@ -21,3 +21,6 @@ data/law_db/
 outputs/
 qdrant_storage/
 assist/
+.vscode/
+.github/
+.agents/
