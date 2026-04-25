@@ -149,6 +149,31 @@ export const translations = {
       rtl: 'RTL',
     },
 
+    // Auth
+    auth: {
+      welcomeBack: 'Welcome Back',
+      loginSubtitle: 'Sign in to access your cases and analysis',
+      createAccount: 'Create Account',
+      signupSubtitle: 'Start analyzing cybercrime evidence today',
+      email: 'Email Address',
+      password: 'Password',
+      fullName: 'Full Name',
+      confirmPassword: 'Confirm Password',
+      signIn: 'Sign In',
+      signUp: 'Sign Up',
+      noAccount: 'Don\'t have an account?',
+      hasAccount: 'Already have an account?',
+      backToHome: 'Back to Home',
+      loginSuccess: 'Signed in successfully',
+      logoutSuccess: 'Signed out successfully',
+      registerSuccess: 'Account created successfully',
+      signOut: 'Sign Out',
+      getStarted: 'Get Started',
+      tryDemo: 'Try Demo Mode',
+      demoHint: 'Explore the app with sample data — no account needed',
+      demoBadge: 'Demo',
+    },
+
     // Common
     common: {
       loading: 'Loading...',
@@ -347,6 +372,31 @@ export const translations = {
       law175: 'القانون رقم 175 لسنة 2018',
       ragPipeline: 'RAG + الذكاء الاصطناعي متعدد الوكلاء',
       rtl: 'RTL',
+    },
+
+    // Auth
+    auth: {
+      welcomeBack: 'مرحباً بعودتك',
+      loginSubtitle: 'سجّل الدخول للوصول إلى قضاياك وتحليلاتك',
+      createAccount: 'إنشاء حساب',
+      signupSubtitle: 'ابدأ تحليل أدلة الجرائم الإلكترونية اليوم',
+      email: 'البريد الإلكتروني',
+      password: 'كلمة المرور',
+      fullName: 'الاسم الكامل',
+      confirmPassword: 'تأكيد كلمة المرور',
+      signIn: 'تسجيل الدخول',
+      signUp: 'إنشاء حساب',
+      noAccount: 'ليس لديك حساب؟',
+      hasAccount: 'لديك حساب بالفعل؟',
+      backToHome: 'العودة للرئيسية',
+      loginSuccess: 'تم تسجيل الدخول بنجاح',
+      logoutSuccess: 'تم تسجيل الخروج بنجاح',
+      registerSuccess: 'تم إنشاء الحساب بنجاح',
+      signOut: 'تسجيل الخروج',
+      getStarted: 'ابدأ الآن',
+      tryDemo: 'تجربة الوضع التجريبي',
+      demoHint: 'استكشف التطبيق ببيانات تجريبية — لا حاجة لحساب',
+      demoBadge: 'تجريبي',
     },
 
     // Common

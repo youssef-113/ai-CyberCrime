@@ -9,6 +9,22 @@ export default function MainLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const location = useLocation()
   const isLanding = location.pathname === '/'
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup'
+
+  // Auth pages render without layout chrome
+  if (isAuthPage) {
+    return (
+      <div className="min-h-screen relative">
+        <Scene3D />
+        <div className="relative z-10">
+          <Header onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
+          <main>
+            <Outlet />
+          </main>
+        </div>
+      </div>
+    )
+  }
 
   if (isLanding) {
     return (

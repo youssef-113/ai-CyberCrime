@@ -1,5 +1,5 @@
 """API Gateway - Main Orchestrator (Port 8000)"""
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
@@ -9,17 +9,30 @@ import uuid
 import os
 from datetime import datetime
 
+from auth import (
+    RegisterRequest, LoginRequest, TokenResponse, RefreshRequest,
+    ChangePasswordRequest, UserResponse,
+)
+from database import (
+    register_user, login_user, refresh_access_token, logout_user,
+    get_user_by_id, change_user_password,
+    create_case, update_case, get_user_cases, get_case_by_id,
+    create_chat_session, get_user_sessions, save_chat_message, get_chat_history,
+)
+from middleware import get_current_user, get_current_user_id
+
 app = FastAPI(
     title="Cybercrime AI - API Gateway",
-    description="Main orchestrator for the 6-stage AI pipeline",
-    version="1.0.0"
+    description="Main orchestrator for the 6-stage AI pipeline with multi-user auth",
+    version="2.0.0"
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[os.getenv("CORS_ORIGIN", "http://localhost:3000")],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 # Service URLs (from environment or defaults)
@@ -31,28 +44,31 @@ SERVICE_URLS = {
     "pdf": os.getenv("PDF_SERVICE_URL", "http://pdf_gen:8005"),
 }
 
-# In-memory case storage (replace with Redis/DB in production)
-cases_db = {}
-
 class CaseStatus(BaseModel):
     case_id: str
     status: str  # processing, completed, failed
     created_at: str
     result: Optional[dict] = None
 
+
+# ══════════════════════════════════════════════════════════════════════════
+#  PUBLIC ROUTES (no auth required)
+# ══════════════════════════════════════════════════════════════════════════
+
 @app.get("/")
 def root():
     return {
         "service": "Cybercrime AI - API Gateway",
-        "version": "1.0.0",
-        "pipeline_stages": ["upload", "ocr", "classify", "rag", "verify", "pdf"]
+        "version": "2.0.0",
+        "pipeline_stages": ["upload", "ocr", "classify", "rag", "verify", "pdf"],
+        "auth_enabled": True,
     }
 
 @app.get("/health")
 async def health():
     """Check all service health"""
     health_status = {"gateway": "healthy", "services": {}}
-    
+
     async with httpx.AsyncClient() as client:
         for name, url in SERVICE_URLS.items():
             try:
@@ -60,28 +76,74 @@ async def health():
                 health_status["services"][name] = "healthy" if resp.status_code == 200 else "unhealthy"
             except:
                 health_status["services"][name] = "unreachable"
-    
+
     return health_status
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  AUTH ROUTES
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.post("/auth/register", response_model=TokenResponse, status_code=201)
+async def register(req: RegisterRequest):
+    """Register a new user account."""
+    return await register_user(req)
+
+
+@app.post("/auth/login", response_model=TokenResponse)
+async def login(req: LoginRequest):
+    """Login with email and password."""
+    return await login_user(req)
+
+
+@app.post("/auth/refresh")
+async def refresh_token(req: RefreshRequest):
+    """Exchange a refresh token for new access + refresh tokens."""
+    return await refresh_access_token(req)
+
+
+@app.post("/auth/logout")
+async def logout(user_id: str = Depends(get_current_user_id)):
+    """Logout - revokes all refresh tokens."""
+    await logout_user(user_id)
+    return {"message": "Logged out successfully"}
+
+
+@app.get("/auth/me", response_model=UserResponse)
+async def get_me(current_user: UserResponse = Depends(get_current_user)):
+    """Get the current authenticated user's profile."""
+    return current_user
+
+
+@app.put("/auth/password")
+async def change_password(
+    req: ChangePasswordRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Change the current user's password."""
+    await change_user_password(user_id, req)
+    return {"message": "Password changed successfully. Please login again."}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  PROTECTED ROUTES (auth required)
+# ══════════════════════════════════════════════════════════════════════════
 
 @app.post("/analyze")
 async def analyze(
     background_tasks: BackgroundTasks,
-    files: List[UploadFile] = File(...)
+    files: List[UploadFile] = File(...),
+    user_id: str = Depends(get_current_user_id),
 ):
-    """Start analysis pipeline (async)"""
+    """Start analysis pipeline (async) - user-scoped"""
     case_id = f"CASE_{uuid.uuid4().hex[:8].upper()}"
-    
-    cases_db[case_id] = {
-        "case_id": case_id,
-        "status": "processing",
-        "created_at": datetime.now().isoformat(),
-        "files_count": len(files),
-        "result": None
-    }
-    
+
+    # Store case in Supabase
+    await create_case(user_id, case_id, len(files))
+
     # Process in background
-    background_tasks.add_task(process_pipeline, case_id, files)
-    
+    background_tasks.add_task(process_pipeline, case_id, files, user_id)
+
     return {
         "case_id": case_id,
         "status": "processing",
@@ -89,58 +151,149 @@ async def analyze(
     }
 
 @app.post("/analyze/json")
-async def analyze_json(files: List[UploadFile] = File(...)):
-    """Run full pipeline and return JSON result (sync)"""
+async def analyze_json(
+    files: List[UploadFile] = File(...),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Run full pipeline and return JSON result (sync) - user-scoped"""
     case_id = f"CASE_{uuid.uuid4().hex[:8].upper()}"
-    
+
     try:
+        await create_case(user_id, case_id, len(files))
         result = await run_pipeline(case_id, files)
+        await update_case(case_id, "completed", result)
         return result
     except Exception as e:
+        await update_case(case_id, "failed", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/cases/{case_id}")
-def get_case(case_id: str):
-    """Get case status and results"""
-    if case_id not in cases_db:
+async def get_case(
+    case_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Get case status and results - user-scoped"""
+    case = await get_case_by_id(case_id, user_id)
+    if not case:
         raise HTTPException(status_code=404, detail="Case not found")
-    return cases_db[case_id]
+    return case
 
 @app.get("/cases")
-def list_cases():
-    """List all cases"""
-    return list(cases_db.values())
+async def list_cases(user_id: str = Depends(get_current_user_id)):
+    """List all cases for the current user"""
+    return await get_user_cases(user_id)
 
 @app.get("/pdf/{case_id}")
-async def download_pdf(case_id: str):
-    """Download generated PDF for case"""
-    if case_id not in cases_db:
+async def download_pdf(
+    case_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Download generated PDF for case - user-scoped"""
+    case = await get_case_by_id(case_id, user_id)
+    if not case:
         raise HTTPException(status_code=404, detail="Case not found")
-    
-    case = cases_db[case_id]
-    if case["status"] != "completed":
+
+    if case.get("status") != "completed":
         raise HTTPException(status_code=400, detail="PDF not ready yet")
-    
-    # Generate PDF on-demand or return cached
+
     pdf_path = f"/outputs/{case_id}.pdf"
     if os.path.exists(pdf_path):
         return FileResponse(pdf_path, media_type="application/pdf")
-    
+
     raise HTTPException(status_code=404, detail="PDF not found")
 
-async def process_pipeline(case_id: str, files: List[UploadFile]):
+
+# ══════════════════════════════════════════════════════════════════════════
+#  CHAT ROUTES (protected, user-scoped)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.get("/sessions")
+async def list_sessions(user_id: str = Depends(get_current_user_id)):
+    """List all chat sessions for the current user."""
+    sessions = await get_user_sessions(user_id)
+    return {"sessions": sessions}
+
+@app.post("/chat")
+async def chat(
+    session_id: str,
+    user_message: str,
+    case_context: Optional[dict] = None,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Send a chat message - user-scoped with persistence."""
+    # Ensure session belongs to user
+    sessions = await get_user_sessions(user_id)
+    user_session_ids = [s["session_id"] for s in sessions]
+
+    if session_id not in user_session_ids:
+        # Auto-create session if it doesn't exist
+        await create_chat_session(user_id, session_id, case_context=case_context)
+
+    # Save user message
+    await save_chat_message(session_id, "user", user_message)
+
+    # Forward to chatbot service
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{SERVICE_URLS.get('chatbot', 'http://chatbot:8006')}/chat",
+                json={
+                    "session_id": session_id,
+                    "user_message": user_message,
+                    "case_context": case_context,
+                },
+                timeout=60.0,
+            )
+            reply_data = resp.json()
+        except Exception:
+            reply_data = {"reply": "Sorry, the chatbot service is currently unavailable.", "citations": []}
+
+    # Save assistant reply
+    reply_text = reply_data.get("reply", "")
+    citations = reply_data.get("citations", [])
+    await save_chat_message(session_id, "assistant", reply_text, citations)
+
+    return reply_data
+
+@app.post("/chat/reset")
+async def reset_chat(
+    session_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Reset a chat session."""
+    return {"message": "Chat session reset", "session_id": session_id}
+
+@app.get("/chat/history")
+async def chat_history(
+    session_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Get chat history for a session - user-scoped."""
+    # Verify session belongs to user
+    sessions = await get_user_sessions(user_id)
+    user_session_ids = [s["session_id"] for s in sessions]
+    if session_id not in user_session_ids:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    messages = await get_chat_history(session_id)
+    return {"session_id": session_id, "messages": messages}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  PIPELINE LOGIC
+# ══════════════════════════════════════════════════════════════════════════
+
+async def process_pipeline(case_id: str, files: List[UploadFile], user_id: str):
     """Background pipeline processing"""
     try:
         result = await run_pipeline(case_id, files)
-        cases_db[case_id]["status"] = "completed"
-        cases_db[case_id]["result"] = result
+        await update_case(case_id, "completed", result)
     except Exception as e:
-        cases_db[case_id]["status"] = "failed"
-        cases_db[case_id]["error"] = str(e)
+        await update_case(case_id, "failed", error=str(e))
 
 async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
     """Execute full 6-stage pipeline"""
-    
+
     async with httpx.AsyncClient() as client:
         # Stage 1: OCR & Entity Extraction
         ocr_results = []
@@ -152,12 +305,12 @@ async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
                 timeout=60.0
             )
             ocr_results.append(resp.json())
-        
+
         # Combine OCR results
         combined_text = " ".join([r["text"] for r in ocr_results])
         all_entities = merge_entities([r["entities"] for r in ocr_results])
         avg_confidence = sum([r["confidence"] for r in ocr_results]) / len(ocr_results)
-        
+
         # Stage 2: Classification
         classify_resp = await client.post(
             f"{SERVICE_URLS['classifier']}/classify",
@@ -165,7 +318,7 @@ async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
             timeout=30.0
         )
         classification = classify_resp.json()
-        
+
         # Stage 3: RAG - Legal Retrieval
         rag_resp = await client.post(
             f"{SERVICE_URLS['rag']}/retrieve",
@@ -177,7 +330,7 @@ async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
             timeout=30.0
         )
         articles = rag_resp.json().get("articles", [])
-        
+
         # Stage 4: Verification
         verify_resp = await client.post(
             f"{SERVICE_URLS['verification']}/verify",
@@ -190,7 +343,7 @@ async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
             timeout=60.0
         )
         verification = verify_resp.json()
-        
+
         # Stage 5: Build result
         result = {
             "case_id": case_id,
@@ -210,22 +363,21 @@ async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
             "ocr_confidence": round(avg_confidence, 2),
             "files_processed": len(files)
         }
-        
+
         return result
 
 def merge_entities(entities_list: list) -> dict:
     """Merge entities from multiple files"""
     merged = {"phones": [], "amounts": [], "dates": [], "accounts": [], "emails": []}
-    
+
     for entities in entities_list:
         for key in merged:
             if key in entities:
-                # Avoid duplicates
                 existing = {e["value"] for e in merged[key]}
                 for e in entities[key]:
                     if e["value"] not in existing:
                         merged[key].append(e)
-    
+
     return merged
 
 if __name__ == "__main__":

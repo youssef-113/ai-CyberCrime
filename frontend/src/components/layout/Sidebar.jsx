@@ -1,7 +1,9 @@
-import { NavLink } from 'react-router-dom'
-import { Home, Search, LayoutDashboard, MessageSquare, Settings, FileText, ChevronLeft, ChevronRight } from 'lucide-react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { Home, Search, LayoutDashboard, MessageSquare, Settings, FileText, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
+import { useAuth } from '../../context/AuthContext'
 import { getTranslation } from '../../utils/translations'
+import toast from 'react-hot-toast'
 import clsx from 'clsx'
 
 const navItems = [
@@ -15,8 +17,20 @@ const navItems = [
 
 export default function Sidebar() {
   const { sidebarCollapsed, toggleSidebar, isRtl, language } = useTheme()
+  const { logout } = useAuth()
+  const navigate = useNavigate()
   
   const t = (key) => getTranslation(language, key)
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+      toast.success(t('auth.logoutSuccess'))
+      navigate('/login')
+    } catch {
+      // Logout error is handled in AuthContext
+    }
+  }
 
   return (
     <aside
@@ -56,7 +70,22 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="p-2 border-t border-neutral-800/50">
+      <div className="p-2 border-t border-neutral-800/50 space-y-2">
+        {/* Logout Button */}
+        <button
+          onClick={handleLogout}
+          className={clsx(
+            'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full',
+            'text-neutral-400 hover:bg-danger/10 hover:text-danger-light'
+          )}
+          aria-label={t('auth.signOut')}
+          title={t('auth.signOut')}
+        >
+          <LogOut className="w-5 h-5 shrink-0" />
+          {!sidebarCollapsed && <span>{t('auth.signOut')}</span>}
+        </button>
+
+        {/* Collapse Toggle */}
         <button
           onClick={toggleSidebar}
           className="btn-ghost btn-icon w-full flex items-center justify-center"

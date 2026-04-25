@@ -46,3 +46,50 @@ export function validatePhone(phone) {
   const egPhone = /^(\+20|0)(10|11|12|15)\d{8}$/
   return egPhone.test(phone.replace(/\s/g, ''))
 }
+
+export function validatePasswordStrength(password) {
+  const errors = []
+  const MIN_LENGTH = 8
+
+  if (!password) {
+    return { valid: false, errors: ['Password is required'], strength: 0 }
+  }
+
+  if (password.length < MIN_LENGTH) {
+    errors.push(`Password must be at least ${MIN_LENGTH} characters long`)
+  }
+  if (password.length > 128) {
+    errors.push('Password must not exceed 128 characters')
+  }
+  if (!/[A-Z]/.test(password)) {
+    errors.push('Password must contain at least one uppercase letter')
+  }
+  if (!/[a-z]/.test(password)) {
+    errors.push('Password must contain at least one lowercase letter')
+  }
+  if (!/\d/.test(password)) {
+    errors.push('Password must contain at least one digit')
+  }
+  if (!/[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/~`]/.test(password)) {
+    errors.push('Password must contain at least one special character')
+  }
+
+  // Check common passwords
+  const commonPasswords = [
+    'password', 'password1', 'password123', '12345678', 'qwerty12',
+    'abc12345', 'admin123', 'letmein1', 'welcome1', 'monkey123',
+  ]
+  if (commonPasswords.includes(password.toLowerCase())) {
+    errors.push('This password is too common. Choose a more unique password')
+  }
+
+  // Calculate strength score (0-5)
+  let strength = 0
+  if (password.length >= MIN_LENGTH) strength++
+  if (/[A-Z]/.test(password)) strength++
+  if (/[a-z]/.test(password)) strength++
+  if (/\d/.test(password)) strength++
+  if (/[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/~`]/.test(password)) strength++
+
+  return { valid: errors.length === 0, errors, strength }
+}

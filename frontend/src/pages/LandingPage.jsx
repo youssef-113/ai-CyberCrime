@@ -1,9 +1,12 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Shield, Upload, Cpu, Scale, FileText, MessageSquare, ArrowRight, CheckCircle } from 'lucide-react'
+import { Shield, Upload, Cpu, Scale, FileText, MessageSquare, ArrowRight, CheckCircle, Zap } from 'lucide-react'
 import Button from '../components/ui/Button'
 import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
 import { getTranslation } from '../utils/translations'
+import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 
 const features = [
   {
@@ -47,6 +50,8 @@ const steps = [
 
 export default function LandingPage() {
   const { language, isRtl } = useTheme()
+  const { loginAsDemo } = useAuth()
+  const navigate = useNavigate()
   
   const t = (key) => getTranslation(language, key)
 
@@ -93,17 +98,30 @@ export default function LandingPage() {
               {t('landing.heroSubtitle')}
             </p>
             <div className="flex flex-wrap gap-4">
-              <Link to="/analyze">
+              <Link to="/signup">
                 <Button size="lg" className="gap-2">
-                  {t('landing.startNewCase')}
+                  {t('auth.getStarted')}
                   <ArrowRight className={`w-5 h-5 ${isRtl ? 'rotate-180' : ''}`} />
                 </Button>
               </Link>
-              <Link to="/dashboard">
+              <Link to="/login">
                 <Button variant="outline" size="lg">
-                  {t('landing.viewDashboard')}
+                  {t('auth.signIn')}
                 </Button>
               </Link>
+              <Button
+                variant="secondary"
+                size="lg"
+                className="gap-2"
+                onClick={() => {
+                  loginAsDemo()
+                  toast.success(t('auth.loginSuccess'))
+                  navigate('/dashboard')
+                }}
+              >
+                <Zap className="w-5 h-5 text-warning" />
+                {t('auth.tryDemo')}
+              </Button>
             </div>
           </motion.div>
 
@@ -199,9 +217,9 @@ export default function LandingPage() {
             <p className="text-neutral-400 max-w-xl mx-auto mb-8">
               {t('landing.readyToBuildDesc')}
             </p>
-            <Link to="/analyze">
+            <Link to="/signup">
               <Button size="lg" className="gap-2">
-                {t('landing.getStarted')}
+                {t('auth.getStarted')}
                 <ArrowRight className={`w-5 h-5 ${isRtl ? 'rotate-180' : ''}`} />
               </Button>
             </Link>
