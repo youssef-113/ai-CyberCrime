@@ -1,18 +1,15 @@
 import { useState } from 'react'
-import { Globe, Shield, Server, Info, RefreshCw, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
+import { Globe, Shield, Info, Database } from 'lucide-react'
 import { Card, CardBody } from '../components/ui/Card'
-import Button from '../components/ui/Button'
-import Input from '../components/ui/Input'
 import Badge from '../components/ui/Badge'
 import { useTheme } from '../context/ThemeContext'
-import { useHealthCheck } from '../api/hooks'
 import { LANGUAGES } from '../utils/constants'
 import { getTranslation } from '../utils/translations'
+import SystemStatus from '../components/admin/SystemStatus'
 import toast from 'react-hot-toast'
 
 export default function SettingsPage() {
   const { language, setLanguage, isRtl } = useTheme()
-  const { health, checkHealth, loading } = useHealthCheck()
   
   const t = (key) => getTranslation(language, key)
 
@@ -20,27 +17,6 @@ export default function SettingsPage() {
     setLanguage(code)
     const lang = LANGUAGES.find((l) => l.code === code)
     toast.success(t('settings.languageDesc'))
-  }
-
-  const handleTestConnection = async () => {
-    try {
-      await checkHealth()
-      toast.success('API is healthy')
-    } catch {
-      toast.error('Cannot reach API server')
-    }
-  }
-
-  const getServiceIcon = (status) => {
-    if (status === 'healthy') return <CheckCircle2 className="w-4 h-4 text-success-light" />
-    if (status === 'unhealthy') return <XCircle className="w-4 h-4 text-danger-light" />
-    return <AlertCircle className="w-4 h-4 text-warning-light" />
-  }
-
-  const getServiceBadge = (status) => {
-    if (status === 'healthy') return <Badge variant="success">Healthy</Badge>
-    if (status === 'unhealthy') return <Badge variant="danger">Unhealthy</Badge>
-    return <Badge variant="warning">Unreachable</Badge>
   }
 
   return (
@@ -102,6 +78,16 @@ export default function SettingsPage() {
               <span>{t('settings.privacy4')}</span>
             </li>
           </ul>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <div className="px-6 py-4 border-b border-neutral-800 flex items-center gap-2">
+          <Database className="w-5 h-5 text-primary" />
+          <h2 className="text-lg font-semibold">System Status</h2>
+        </div>
+        <CardBody>
+          <SystemStatus />
         </CardBody>
       </Card>
 

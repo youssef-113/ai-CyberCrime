@@ -173,4 +173,8 @@ dependencies:
       - wrapt==2.1.2
       - zipp==3.23.1
       - zopfli==0.4.1
+      - PyJWT==2.8.0
+      - bcrypt==4.1.2
+      - supabase==2.4.0
+      - email-validator==2.1.0
 prefix: /home/youssef/miniconda3/envs/cybercrime

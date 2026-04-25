@@ -15,7 +15,7 @@ from auth import (
 )
 from database import (
     register_user, login_user, refresh_access_token, logout_user,
-    get_user_by_id, change_user_password,
+    get_user_by_id, change_user_password, get_supabase,
     create_case, update_case, get_user_cases, get_case_by_id,
     create_chat_session, get_user_sessions, save_chat_message, get_chat_history,
 )
@@ -66,8 +66,19 @@ def root():
 
 @app.get("/health")
 async def health():
-    """Check all service health"""
-    health_status = {"gateway": "healthy", "services": {}}
+    """Check all service health including Supabase connection"""
+    health_status = {"gateway": "healthy", "services": {}, "database": "unknown"}
+
+    # Check Supabase connection
+    try:
+        db = get_supabase()
+        # Try a simple query to verify connection
+        result = db.table("users").select("count", count="exact").limit(1).execute()
+        health_status["database"] = "connected"
+        health_status["supabase"] = "connected"
+    except Exception as e:
+        health_status["database"] = "disconnected"
+        health_status["supabase"] = f"error: {str(e)}"
 
     async with httpx.AsyncClient() as client:
         for name, url in SERVICE_URLS.items():
@@ -123,6 +134,14 @@ async def change_password(
     """Change the current user's password."""
     await change_user_password(user_id, req)
     return {"message": "Password changed successfully. Please login again."}
+
+
+@app.get("/auth/users")
+async def list_users(current_user: UserResponse = Depends(get_current_user)):
+    """List all users (admin feature - returns limited fields)."""
+    db = get_supabase()
+    result = db.table("users").select("id, email, full_name, is_active, is_verified, created_at").execute()
+    return {"users": result.data or []}
 
 
 # ══════════════════════════════════════════════════════════════════════════

@@ -37,4 +37,9 @@ export const authApi = {
     })
     return response.data
   },
+
+  getUsers: async () => {
+    const response = await client.get(`${AUTH_BASE}/users`)
+    return response.data
+  },
 }
