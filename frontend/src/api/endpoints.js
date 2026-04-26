@@ -99,11 +99,36 @@ export const classifyCrime = async (text, entities) => {
   return response.data
 }
 
-export const retrieveArticles = async (query, crimeType, topK = 5) => {
+export const retrieveArticles = async (query, crimeType, topK = 5, options = {}) => {
   const response = await client.post('/retrieve', {
     query,
     crime_type: crimeType,
     top_k: topK,
+    tenant_id: options.tenantId || 'default',
+    transform_strategy: options.transformStrategy || 'auto',
+  })
+  return response.data
+}
+
+export const checkFaithfulness = async (query, answer, citations = []) => {
+  const response = await client.post('/faithfulness', {
+    query,
+    answer,
+    citations,
+  })
+  return response.data
+}
+
+export const getRagStats = async () => {
+  const response = await client.get('/stats')
+  return response.data
+}
+
+export const indexArticles = async (articles, tenantId = 'default', asyncIngest = false) => {
+  const response = await client.post('/index', {
+    articles,
+    tenant_id: tenantId,
+    async_ingest: asyncIngest,
   })
   return response.data
 }

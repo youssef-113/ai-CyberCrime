@@ -52,6 +52,11 @@ LLM_MODEL         = os.getenv("LLM_MODEL", "claude-sonnet-4-6")
 MAX_HISTORY_TURNS = int(os.getenv("MAX_CHAT_HISTORY", "20"))
 MAX_TOKENS        = int(os.getenv("MAX_CHAT_TOKENS", "800"))
 
+# Ollama Config (primary LLM)
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+OLLAMA_TIMEOUT  = int(os.getenv("OLLAMA_TIMEOUT", "60"))
+
 # ── Crime type labels ───────────────────────────────────────────────────────
 CRIME_TYPE_AR = {
     "blackmail":      "ابتزاز إلكتروني",
@@ -258,6 +263,43 @@ Verified Claims:
 
 
 # ── LLM callers ───────────────────────────────────────────────────────────────
+
+
+def call_ollama(system: str, history: List[dict], user_message: str) -> Optional[str]:
+    """Call Ollama for chat generation (primary LLM)."""
+    import httpx
+
+    try:
+        # Build conversation prompt from history
+        prompt_parts = []
+        for msg in history[-MAX_HISTORY_TURNS:]:
+            role = "User" if msg["role"] == "user" else "Assistant"
+            prompt_parts.append(f"{role}: {msg['content']}")
+        prompt_parts.append(f"User: {user_message}")
+        prompt_parts.append("Assistant:")
+        full_prompt = "\n".join(prompt_parts)
+
+        base_url = OLLAMA_BASE_URL.rstrip("/")
+        resp = httpx.post(
+            f"{base_url}/api/generate",
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": full_prompt,
+                "system": system,
+                "stream": False,
+                "options": {
+                    "temperature": 0.3,
+                    "num_predict": MAX_TOKENS,
+                },
+            },
+            timeout=OLLAMA_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("response", "").strip()
+    except Exception as e:
+        logger.error(f"Ollama error: {e}")
+        return None
 
 
 def call_gemini(system: str, history: List[dict], user_message: str) -> str:
@@ -524,10 +566,11 @@ def chat(
         f"| len={len(user_message)} | history={len(history)//2} turns | lang={language}"
     )
 
-    # Try LLMs in order
+    # Try LLMs in order: Ollama → Claude → Gemini → rule-based
     reply = None
 
-    if ANTHROPIC_API_KEY:
+    reply = call_ollama(system, history, user_message)
+    if reply is None and ANTHROPIC_API_KEY:
         reply = call_claude(system, history, user_message)
     if reply is None and GEMINI_API_KEY:
         reply = call_gemini(system, history, user_message)
@@ -552,11 +595,11 @@ def chat(
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    llm = "claude" if ANTHROPIC_API_KEY else "gemini" if GEMINI_API_KEY else "rule-based"
+    llm = "ollama" if OLLAMA_BASE_URL else "claude" if ANTHROPIC_API_KEY else "gemini" if GEMINI_API_KEY else "rule-based"
     return HealthResponse(
         status="ok",
         service="chatbot",
-        version=f"llm={llm} sessions={len(_sessions)} max_history={MAX_HISTORY_TURNS}",
+        version=f"llm={llm} model={OLLAMA_MODEL} sessions={len(_sessions)} max_history={MAX_HISTORY_TURNS}",
     )
 
 

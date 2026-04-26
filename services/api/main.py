@@ -42,6 +42,7 @@ SERVICE_URLS = {
     "rag": os.getenv("RAG_SERVICE_URL", "http://rag:8003"),
     "verification": os.getenv("VERIFICATION_SERVICE_URL", "http://verification:8004"),
     "pdf": os.getenv("PDF_SERVICE_URL", "http://pdf_gen:8005"),
+    "chatbot": os.getenv("CHATBOT_SERVICE_URL", "http://chatbot:8006"),
 }
 
 class CaseStatus(BaseModel):
@@ -299,6 +300,100 @@ async def chat_history(
 
 
 # ══════════════════════════════════════════════════════════════════════════
+#  RAG PROXY ROUTES (protected, user-scoped)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.post("/retrieve")
+async def retrieve_articles(
+    query: str,
+    crime_type: str = "",
+    top_k: int = 5,
+    tenant_id: str = "default",
+    transform_strategy: str = "auto",
+    user_id: str = Depends(get_current_user_id),
+):
+    """Proxy to RAG service: retrieve relevant law articles."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{SERVICE_URLS['rag']}/retrieve",
+                json={
+                    "query": query,
+                    "crime_type": crime_type,
+                    "top_k": top_k,
+                    "tenant_id": tenant_id,
+                    "transform_strategy": transform_strategy,
+                },
+                timeout=30.0,
+            )
+            return resp.json()
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"RAG service unavailable: {e}")
+
+
+@app.get("/stats")
+async def rag_stats(user_id: str = Depends(get_current_user_id)):
+    """Proxy to RAG service: get service statistics."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(f"{SERVICE_URLS['rag']}/stats", timeout=10.0)
+            return resp.json()
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"RAG service unavailable: {e}")
+
+
+@app.post("/faithfulness")
+async def check_faithfulness(
+    query: str,
+    answer: str,
+    citations: list = [],
+    user_id: str = Depends(get_current_user_id),
+):
+    """Proxy to RAG service: check faithfulness of generated output."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{SERVICE_URLS['rag']}/faithfulness",
+                json={"query": query, "answer": answer, "citations": citations},
+                timeout=15.0,
+            )
+            return resp.json()
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"RAG service unavailable: {e}")
+
+
+@app.post("/index")
+async def index_articles(
+    articles: list,
+    tenant_id: str = "default",
+    async_ingest: bool = False,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Proxy to RAG service: index law articles."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{SERVICE_URLS['rag']}/index",
+                json={"articles": articles, "tenant_id": tenant_id, "async_ingest": async_ingest},
+                timeout=60.0,
+            )
+            return resp.json()
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"RAG service unavailable: {e}")
+
+
+@app.get("/tenants")
+async def list_tenants(user_id: str = Depends(get_current_user_id)):
+    """Proxy to RAG service: list tenant namespaces."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(f"{SERVICE_URLS['rag']}/tenants", timeout=10.0)
+            return resp.json()
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"RAG service unavailable: {e}")
+
+
+# ══════════════════════════════════════════════════════════════════════════
 #  PIPELINE LOGIC
 # ══════════════════════════════════════════════════════════════════════════
 
@@ -338,17 +433,20 @@ async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
         )
         classification = classify_resp.json()
 
-        # Stage 3: RAG - Legal Retrieval
+        # Stage 3: RAG - Legal Retrieval (Production Pipeline)
         rag_resp = await client.post(
             f"{SERVICE_URLS['rag']}/retrieve",
             json={
                 "query": combined_text[:500],
                 "crime_type": classification["crime_type"],
-                "top_k": 5
+                "top_k": 5,
+                "tenant_id": user_id,
+                "transform_strategy": "auto",
             },
             timeout=30.0
         )
-        articles = rag_resp.json().get("articles", [])
+        rag_data = rag_resp.json()
+        articles = rag_data.get("articles", [])
 
         # Stage 4: Verification
         verify_resp = await client.post(
@@ -369,6 +467,11 @@ async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
             "classification": classification,
             "entities": all_entities,
             "articles": articles,
+            "rag_meta": {
+                "cache_hit": rag_data.get("cache_hit", False),
+                "query_strategy": rag_data.get("query_strategy", "none"),
+                "latency_ms": rag_data.get("latency_ms", 0),
+            },
             "verification": {
                 "status": verification["status"],
                 "rounds": verification["rounds"]
