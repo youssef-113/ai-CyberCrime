@@ -1,0 +1,46 @@
+{
+  "case_id": "TC_BLACKMAIL_002",
+  "crime_type": "blackmail",
+  "difficulty": "medium",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "لو ما دفعتش 5000 جنيه هننشر صورك",
+      "expected_entities": {
+        "amounts": [
+          "5000 جنيه"
+        ]
+      }
+    },
+    {
+      "block_id": "E002",
+      "text": "صورة شخصية خاصة للضحية",
+      "expected_entities": {}
+    },
+    {
+      "block_id": "E003",
+      "text": "حول المبلغ على الرقم 01598765432",
+      "expected_entities": {
+        "phones": [
+          "01598765432"
+        ]
+      }
+    }
+  ],
+  "expected_output": {
+    "crime_type": "blackmail",
+    "expected_articles": [
+      "law175_art25",
+      "law175_art26"
+    ],
+    "expected_entities": {
+      "phones": [
+        "01598765432"
+      ],
+      "amounts": [
+        "5000 جنيه"
+      ]
+    },
+    "expected_min_score": 70
+  }
+}

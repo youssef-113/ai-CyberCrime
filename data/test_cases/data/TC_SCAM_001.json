@@ -1,0 +1,28 @@
+{
+  "case_id": "TC_SCAM_001",
+  "crime_type": "scam",
+  "difficulty": "hard",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "استثمر 3000 جنيه واربح 50% خلال أسبوع",
+      "expected_entities": {
+        "amounts": [
+          "3000 جنيه"
+        ]
+      }
+    }
+  ],
+  "expected_output": {
+    "crime_type": "scam",
+    "expected_articles": [
+      "fraud_art1"
+    ],
+    "expected_entities": {
+      "amounts": [
+        "3000 جنيه"
+      ]
+    },
+    "expected_min_score": 70
+  }
+}

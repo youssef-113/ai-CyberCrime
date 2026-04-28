@@ -1,0 +1,20 @@
+{
+  "case_id": "TC_THREAT_004",
+  "crime_type": "threat",
+  "difficulty": "hard",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "هقتلك لو شفتك تاني",
+      "expected_entities": {}
+    }
+  ],
+  "expected_output": {
+    "crime_type": "threat",
+    "expected_articles": [
+      "threat_art1"
+    ],
+    "expected_entities": {},
+    "expected_min_score": 70
+  }
+}

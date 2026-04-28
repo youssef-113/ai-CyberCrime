@@ -1,0 +1,20 @@
+{
+  "case_id": "TC_DEFAMATION_004",
+  "crime_type": "defamation",
+  "difficulty": "easy",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "فلان حرامي وسرق الشركة",
+      "expected_entities": {}
+    }
+  ],
+  "expected_output": {
+    "crime_type": "defamation",
+    "expected_articles": [
+      "defamation_art1"
+    ],
+    "expected_entities": {},
+    "expected_min_score": 70
+  }
+}
