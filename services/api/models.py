@@ -57,3 +57,32 @@ class CaseSummary(BaseModel):
     status: str
     score: int
     grade: str
+
+# -----------------------------
+# Test Case Models (added for test_cases JSON validation)
+# -----------------------------
+
+class ExpectedEntities(BaseModel):
+    amounts: Optional[List[str]] = []
+    phones: Optional[List[str]] = []
+
+
+class EvidenceBlock(BaseModel):
+    block_id: str
+    text: str
+    expected_entities: ExpectedEntities
+
+
+class ExpectedOutput(BaseModel):
+    crime_type: str
+    expected_articles: List[str]
+    expected_entities: ExpectedEntities
+    expected_min_score: int
+
+
+class TestCase(BaseModel):
+    case_id: str
+    crime_type: str
+    difficulty: str
+    evidence_texts: List[EvidenceBlock]
+    expected_output: ExpectedOutput
