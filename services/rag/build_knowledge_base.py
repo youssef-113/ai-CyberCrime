@@ -1,7 +1,7 @@
-"""Build knowledge base from law articles - Qdrant with Rich Metadata
+"""Build knowledge base from law articles - ChromaDB with Rich Metadata
 
 Each chunk includes:
-- Short 1-2 line summary (from article title)
+- Short 1-2 line summary
 - Keywords
 - Source document info
 - Parent-child relationships for context expansion
@@ -19,16 +19,14 @@ def build_knowledge_base(
     articles_path: str = None,
     tenant_id: str = "default",
 ):
-    """Index law articles into Qdrant with rich metadata and parent-child chunking."""
+    """Index law articles into ChromaDB with rich metadata and parent-child chunking."""
     from ingestion import index_articles
-    from config import config
 
     articles_path = articles_path or os.getenv(
         "ARTICLES_PATH",
         "/data/law/articles.json"
     )
 
-    # Load articles
     try:
         with open(articles_path, "r", encoding="utf-8") as f:
             articles = json.load(f)
@@ -66,16 +64,16 @@ def build_knowledge_base(
             },
         ]
 
-    # Normalize articles: ensure each has 'text' field
     for article in articles:
         if not article.get("text"):
             article["text"] = article.get("text_ar", "") or article.get("text_en", "") or ""
+
         if not article.get("summary"):
             article["summary"] = article.get("title_ar", "") or article.get("title_en", "") or ""
+
         if not article.get("keywords"):
             article["keywords"] = []
 
-    # Index via ingestion pipeline (chunking + content-addressable embedding + Qdrant)
     result = index_articles(articles, tenant_id=tenant_id)
 
     logger.info(f"Build complete: {result}")
@@ -83,6 +81,5 @@ def build_knowledge_base(
 
 
 if __name__ == "__main__":
-    # Allow passing articles path as CLI arg
     path = sys.argv[1] if len(sys.argv) > 1 else None
     build_knowledge_base(articles_path=path)

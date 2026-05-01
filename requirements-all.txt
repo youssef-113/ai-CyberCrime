@@ -135,3 +135,6 @@ websockets==16.0
 wrapt==2.1.2
 zipp==3.23.1
 zopfli==0.4.1
+huggingface_hub>=0.34.0,<1.0
+sentence-transformers>=2.7.0
+urllib3<2.0.0
