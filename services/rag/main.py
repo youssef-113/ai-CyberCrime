@@ -197,11 +197,14 @@ async def retrieve(request: RetrieveRequest):
         raise HTTPException(status_code=503, detail=f"Retrieval service unavailable: {e}")
 
     seen_ids = set()
+    seen_articles = set()
     unique_results = []
 
     for r in all_results:
-        if r.id not in seen_ids:
+        article_num = r.metadata.get("article_number", "") if r.metadata else ""
+        if article_num not in seen_articles:
             seen_ids.add(r.id)
+            seen_articles.add(article_num)
             unique_results.append(r)
 
     try:
