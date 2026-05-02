@@ -134,10 +134,11 @@ async def extract_text(file: UploadFile = File(...)):
             processing_metadata={
                 "processing_time_ms": round(processing_time, 2),
                 "engine_used": ocr_result.engine,
-                "fallback_used": ocr_result.engine != "easyocr",
+                "fallback_triggered": ocr_result.fallback_triggered,
                 "blocks_count": len(ocr_result.blocks),
                 "threat_indicators": threat_analysis["found_keywords"],
-                "threat_score": threat_analysis["threat_score"]
+                "threat_score": threat_analysis["threat_score"],
+                "confidence_score": ocr_result.confidence_score.model_dump() if ocr_result.confidence_score else None
             }
         )
         
@@ -214,7 +215,9 @@ async def extract_batch(files: List[UploadFile] = File(...)):
                 "processing_time_ms": round(processing_time, 2),
                 "files_processed": len(files),
                 "blocks_count": len(all_blocks),
-                "batch_mode": True
+                "batch_mode": True,
+                "fallback_count": sum(1 for r in all_results if r.fallback_triggered),
+                "confidence_scores": [r.confidence_score.model_dump() for r in all_results if r.confidence_score]
             }
         )
         

@@ -23,12 +23,23 @@ class EvidenceBlock(BaseModel):
     bbox: Optional[List[float]] = None  # Bounding box [x1, y1, x2, y2]
 
 
+class ConfidenceScore(BaseModel):
+    """Confidence scoring with thresholds and weighted average"""
+    average: float = Field(ge=0.0, le=1.0)
+    minimum: float = Field(ge=0.0, le=1.0)
+    weighted_average: float = Field(ge=0.0, le=1.0)
+    status: str  # high, medium, low
+    filtered_word_count: int = 0  # words removed due to low confidence
+
+
 class OCRResult(BaseModel):
     """Result from single OCR engine"""
     text: str
     confidence: float
     blocks: List[EvidenceBlock]
     engine: str  # easyocr, paddleocr
+    confidence_score: Optional[ConfidenceScore] = None
+    fallback_triggered: bool = False
 
 
 class EntityCollection(BaseModel):
