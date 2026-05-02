@@ -18,9 +18,8 @@
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-hot-toast": "^2.4.1",
     "react-router-dom": "^6.22.3",
-    "sweetalert2": "^11.26.24",
+    "sweetalert2": "^11.11.0",
     "three": "^0.160.0"
   },
   "devDependencies": {

@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext'
 import { LANGUAGES } from '../utils/constants'
 import { getTranslation } from '../utils/translations'
 import SystemStatus from '../components/admin/SystemStatus'
-import toast from 'react-hot-toast'
+import { toastSuccess } from '../components/ui/Alert'
 
 export default function SettingsPage() {
   const { language, setLanguage, isRtl } = useTheme()
@@ -16,7 +16,7 @@ export default function SettingsPage() {
   const handleLanguageChange = (code) => {
     setLanguage(code)
     const lang = LANGUAGES.find((l) => l.code === code)
-    toast.success(t('settings.languageDesc'))
+    toastSuccess(t('settings.languageDesc'))
   }
 
   return (

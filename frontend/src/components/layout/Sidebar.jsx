@@ -25,7 +25,7 @@ export default function Sidebar() {
   const handleLogout = async () => {
     try {
       await logout()
-      toast.success(t('auth.logoutSuccess'))
+      toastSuccess(t('auth.logoutSuccess'))
       navigate('/login')
     } catch {
       // Logout error is handled in AuthContext

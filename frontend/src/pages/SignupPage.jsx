@@ -291,7 +291,7 @@ export default function SignupPage() {
               size="lg"
               onClick={() => {
                 loginAsDemo()
-                toast.success(t('auth.loginSuccess'))
+                toastSuccess(t('auth.loginSuccess'))
                 navigate('/dashboard')
               }}
             >

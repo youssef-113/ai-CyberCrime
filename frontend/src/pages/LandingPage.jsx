@@ -115,7 +115,7 @@ export default function LandingPage() {
                 className="gap-2"
                 onClick={() => {
                   loginAsDemo()
-                  toast.success(t('auth.loginSuccess'))
+                  toastSuccess(t('auth.loginSuccess'))
                   navigate('/dashboard')
                 }}
               >
