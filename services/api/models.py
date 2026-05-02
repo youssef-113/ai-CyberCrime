@@ -86,3 +86,69 @@ class TestCase(BaseModel):
     difficulty: str
     evidence_texts: List[EvidenceBlock]
     expected_output: ExpectedOutput
+
+
+# -----------------------------
+# OCR Proxy Models (matches OCR service response)
+# -----------------------------
+
+class OCRExtractedEntity(BaseModel):
+    type: str
+    value: str
+    confidence: float
+    source_block: Optional[str] = None
+
+
+class OCREvidenceBlock(BaseModel):
+    block_id: str
+    file_name: str
+    raw_text: str
+    normalized_text: str
+    confidence: float
+    quality_flag: str
+    ocr_source: str
+    bbox: Optional[List[float]] = None
+
+
+class OCRConfidenceScore(BaseModel):
+    average: float
+    minimum: float
+    weighted_average: float
+    status: str  # high, medium, low
+    filtered_word_count: int = 0
+
+
+class OCRProcessingMetadata(BaseModel):
+    processing_time_ms: float = 0
+    engine_used: str = "unknown"
+    fallback_triggered: bool = False
+    blocks_count: int = 0
+    confidence_score: Optional[OCRConfidenceScore] = None
+
+
+class OCRProxyResponse(BaseModel):
+    """Structured OCR response from the gateway /ocr/extract endpoint"""
+    evidence_blocks: List[OCREvidenceBlock] = []
+    entities: Dict = {}
+    full_text: str = ""
+    normalized_text: str = ""
+    avg_confidence: float = 0
+    language: str = "unknown"
+    processing_metadata: OCRProcessingMetadata = OCRProcessingMetadata()
+
+
+class OCRPerFileSummary(BaseModel):
+    """Per-file OCR summary in pipeline results"""
+    file: str
+    engine: str
+    confidence: float
+    fallback_triggered: bool = False
+    confidence_score: Optional[OCRConfidenceScore] = None
+    language: str = "unknown"
+
+
+class OCRMetadata(BaseModel):
+    """OCR metadata in pipeline results"""
+    avg_confidence: float = 0
+    evidence_blocks: List[Dict] = []
+    per_file: List[OCRPerFileSummary] = []

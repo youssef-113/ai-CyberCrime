@@ -88,9 +88,23 @@ export const triggerPdfFromChat = async (sessionId) => {
 export const extractText = async (file) => {
   const formData = new FormData()
   formData.append('file', file)
-  const response = await client.post('/extract', formData, {
+  const response = await client.post('/ocr/extract', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
+  return response.data
+}
+
+export const extractTextBatch = async (files) => {
+  const formData = new FormData()
+  files.forEach((f) => formData.append('files', f.file || f))
+  const response = await client.post('/ocr/extract/batch', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return response.data
+}
+
+export const getOcrEnginesStatus = async () => {
+  const response = await client.get('/ocr/engines/status')
   return response.data
 }
 

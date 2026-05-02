@@ -211,12 +211,14 @@ export function useSessions() {
 export function useOcr() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [result, setResult] = useState(null)
 
   const extract = useCallback(async (file) => {
     setLoading(true)
     setError(null)
     try {
       const data = await endpoints.extractText(file)
+      setResult(data)
       return data
     } catch (err) {
       const message = err.response?.data?.detail || err.message || 'OCR extraction failed'
@@ -227,7 +229,55 @@ export function useOcr() {
     }
   }, [])
 
-  return { extract, loading, error }
+  return { extract, result, loading, error }
+}
+
+export function useOcrBatch() {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [result, setResult] = useState(null)
+
+  const extractBatch = useCallback(async (files) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await endpoints.extractTextBatch(files)
+      setResult(data)
+      return data
+    } catch (err) {
+      const message = err.response?.data?.detail || err.message || 'Batch OCR failed'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  return { extractBatch, result, loading, error }
+}
+
+export function useOcrEngines() {
+  const [status, setStatus] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const checkStatus = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await endpoints.getOcrEnginesStatus()
+      setStatus(data)
+      return data
+    } catch (err) {
+      const message = err.response?.data?.detail || err.message || 'Failed to check OCR engines'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  return { status, checkStatus, loading, error }
 }
 
 export function useClassification() {

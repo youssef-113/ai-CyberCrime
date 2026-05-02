@@ -300,6 +300,81 @@ async def chat_history(
 
 
 # ══════════════════════════════════════════════════════════════════════════
+#  OCR PROXY ROUTES (protected, user-scoped)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.post("/ocr/extract")
+async def ocr_extract(
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Proxy to OCR service: extract text and entities from a single file."""
+    import logging
+    logger = logging.getLogger("api.ocr")
+
+    file_bytes = await file.read()
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{SERVICE_URLS['ocr']}/extract",
+                files={"file": (file.filename, file_bytes, file.content_type)},
+                timeout=60.0,
+            )
+            result = resp.json()
+            # Log confidence + failures
+            conf = result.get("avg_confidence", 0)
+            engine = result.get("processing_metadata", {}).get("engine_used", "unknown")
+            fallback = result.get("processing_metadata", {}).get("fallback_triggered", False)
+            logger.info(f"OCR extract: file={file.filename} engine={engine} confidence={conf} fallback={fallback}")
+            return result
+        except Exception as e:
+            logger.error(f"OCR extract failed: file={file.filename} error={e}")
+            raise HTTPException(status_code=503, detail=f"OCR service unavailable: {e}")
+
+
+@app.post("/ocr/extract/batch")
+async def ocr_extract_batch(
+    files: List[UploadFile] = File(...),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Proxy to OCR service: batch extract from multiple files."""
+    import logging
+    logger = logging.getLogger("api.ocr")
+
+    async with httpx.AsyncClient() as client:
+        try:
+            multipart_files = []
+            for f in files:
+                file_bytes = await f.read()
+                multipart_files.append(("files", (f.filename, file_bytes, f.content_type)))
+
+            resp = await client.post(
+                f"{SERVICE_URLS['ocr']}/extract/batch",
+                files=multipart_files,
+                timeout=120.0,
+            )
+            result = resp.json()
+            logger.info(f"OCR batch: files={len(files)} confidence={result.get('avg_confidence', 0)}")
+            return result
+        except Exception as e:
+            logger.error(f"OCR batch failed: files={len(files)} error={e}")
+            raise HTTPException(status_code=503, detail=f"OCR service unavailable: {e}")
+
+
+@app.get("/ocr/engines/status")
+async def ocr_engines_status(
+    user_id: str = Depends(get_current_user_id),
+):
+    """Proxy to OCR service: get engine status."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(f"{SERVICE_URLS['ocr']}/engines/status", timeout=10.0)
+            return resp.json()
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"OCR service unavailable: {e}")
+
+
+# ══════════════════════════════════════════════════════════════════════════
 #  RAG PROXY ROUTES (protected, user-scoped)
 # ══════════════════════════════════════════════════════════════════════════
 
@@ -407,23 +482,55 @@ async def process_pipeline(case_id: str, files: List[UploadFile], user_id: str):
 
 async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
     """Execute full 6-stage pipeline"""
+    import logging
+    logger = logging.getLogger("api.pipeline")
 
     async with httpx.AsyncClient() as client:
-        # Stage 1: OCR & Entity Extraction
+        # Stage 1: OCR & Entity Extraction (through service layer)
         ocr_results = []
+        ocr_blocks = []
         for file in files:
             file_bytes = await file.read()
-            resp = await client.post(
-                f"{SERVICE_URLS['ocr']}/extract",
-                files={"file": (file.filename, file_bytes, file.content_type)},
-                timeout=60.0
-            )
-            ocr_results.append(resp.json())
+            try:
+                resp = await client.post(
+                    f"{SERVICE_URLS['ocr']}/extract",
+                    files={"file": (file.filename, file_bytes, file.content_type)},
+                    timeout=60.0
+                )
+                ocr_data = resp.json()
+                ocr_results.append(ocr_data)
+                # Collect evidence blocks
+                ocr_blocks.extend(ocr_data.get("evidence_blocks", []))
+                # Log confidence + failures per file
+                meta = ocr_data.get("processing_metadata", {})
+                logger.info(
+                    f"OCR: file={file.filename} engine={meta.get('engine_used')} "
+                    f"confidence={ocr_data.get('avg_confidence', 0)} "
+                    f"fallback={meta.get('fallback_triggered', False)} "
+                    f"status={meta.get('confidence_score', {}).get('status', 'unknown')}"
+                )
+            except Exception as e:
+                logger.error(f"OCR failed for {file.filename}: {e}")
+                ocr_results.append({"full_text": "", "entities": {}, "avg_confidence": 0, "evidence_blocks": []})
 
-        # Combine OCR results
-        combined_text = " ".join([r["text"] for r in ocr_results])
-        all_entities = merge_entities([r["entities"] for r in ocr_results])
-        avg_confidence = sum([r["confidence"] for r in ocr_results]) / len(ocr_results)
+        # Combine OCR results using structured fields
+        combined_text = " ".join([r.get("full_text", "") or r.get("normalized_text", "") for r in ocr_results])
+        all_entities = merge_entities([r.get("entities", {}) for r in ocr_results])
+        avg_confidence = sum([r.get("avg_confidence", 0) for r in ocr_results]) / max(len(ocr_results), 1)
+
+        # Collect OCR metadata for result
+        ocr_metadata = {
+            "avg_confidence": round(avg_confidence, 3),
+            "evidence_blocks": ocr_blocks,
+            "per_file": [{
+                "file": r.get("evidence_blocks", [{}])[0].get("file_name", "unknown") if r.get("evidence_blocks") else "unknown",
+                "engine": r.get("processing_metadata", {}).get("engine_used", "unknown"),
+                "confidence": r.get("avg_confidence", 0),
+                "fallback_triggered": r.get("processing_metadata", {}).get("fallback_triggered", False),
+                "confidence_score": r.get("processing_metadata", {}).get("confidence_score"),
+                "language": r.get("language", "unknown"),
+            } for r in ocr_results],
+        }
 
         # Stage 2: Classification
         classify_resp = await client.post(
@@ -482,7 +589,8 @@ async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
                 "breakdown": verification["score_breakdown"]
             },
             "timeline": verification["timeline"],
-            "ocr_confidence": round(avg_confidence, 2),
+            "ocr": ocr_metadata,
+            "ocr_confidence": round(avg_confidence, 3),
             "files_processed": len(files)
         }
 
@@ -490,14 +598,15 @@ async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
 
 def merge_entities(entities_list: list) -> dict:
     """Merge entities from multiple files"""
-    merged = {"phones": [], "amounts": [], "dates": [], "accounts": [], "emails": []}
+    merged = {"phones": [], "amounts": [], "dates": [], "accounts": [], "emails": [], "urls": [], "ibans": []}
 
     for entities in entities_list:
         for key in merged:
             if key in entities:
-                existing = {e["value"] for e in merged[key]}
+                existing = {e.get("value", e) if isinstance(e, dict) else e for e in merged[key]}
                 for e in entities[key]:
-                    if e["value"] not in existing:
+                    val = e.get("value", e) if isinstance(e, dict) else e
+                    if val not in existing:
                         merged[key].append(e)
 
     return merged

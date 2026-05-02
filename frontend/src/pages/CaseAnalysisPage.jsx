@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Upload, FileImage, FileText, X, AlertCircle, CheckCircle2, Clock, Phone, User, DollarSign, Scale, Download, RotateCcw, ChevronRight } from 'lucide-react'
+import { Upload, FileImage, FileText, X, AlertCircle, CheckCircle2, Clock, Phone, User, DollarSign, Scale, Download, RotateCcw, ChevronRight, Eye, Cpu, ArrowRight } from 'lucide-react'
 import { Card, CardBody } from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
@@ -274,6 +274,83 @@ function ResultView({ result, onDownload, onReset, downloading }) {
           </CardBody>
         </Card>
       </div>
+
+      {result.ocr && (
+        <Card>
+          <div className="px-6 py-4 border-b border-neutral-800 flex items-center gap-2">
+            <Eye className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold">{language === 'ar' ? 'تفاصيل التعرف على النص' : 'OCR Details'}</h2>
+          </div>
+          <CardBody>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-neutral-800/50 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Cpu className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-neutral-300">{language === 'ar' ? 'محرك التعرف' : 'Engine'}</span>
+                </div>
+                <p className="text-sm font-mono">{result.ocr.per_file?.[0]?.engine || result.processing_metadata?.engine_used || 'easyocr'}</p>
+              </div>
+              <div className="bg-neutral-800/50 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-neutral-300">{language === 'ar' ? 'ثقة التعرف' : 'OCR Confidence'}</span>
+                </div>
+                <p className={`text-sm font-mono ${
+                  (result.ocr.avg_confidence || result.ocr_confidence || 0) >= 0.7 ? 'text-success-light' :
+                  (result.ocr.avg_confidence || result.ocr_confidence || 0) >= 0.5 ? 'text-warning-light' : 'text-danger-light'
+                }`}>
+                  {Math.round((result.ocr.avg_confidence || result.ocr_confidence || 0) * 100)}%
+                  {result.ocr.per_file?.[0]?.confidence_score?.status &&
+                    ` (${result.ocr.per_file[0].confidence_score.status})`
+                  }
+                </p>
+              </div>
+              <div className="bg-neutral-800/50 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <ArrowRight className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-neutral-300">{language === 'ar' ? 'محرك بديل' : 'Fallback'}</span>
+                </div>
+                <p className="text-sm font-mono">
+                  {result.ocr.per_file?.some(f => f.fallback_triggered) ?
+                    (language === 'ar' ? 'نعم - تم استخدام PaddleOCR' : 'Yes — PaddleOCR used') :
+                    (language === 'ar' ? 'لا - EasyOCR كافي' : 'No — EasyOCR sufficient')
+                  }
+                </p>
+              </div>
+              <div className="bg-neutral-800/50 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-neutral-300">{language === 'ar' ? 'اللغة' : 'Language'}</span>
+                </div>
+                <p className="text-sm font-mono">
+                  {{ ar: 'عربي', en: 'English', mixed: 'مختلط' }[result.ocr.per_file?.[0]?.language || result.language || 'en'] || 'English'}
+                </p>
+              </div>
+            </div>
+            {result.ocr.per_file && result.ocr.per_file.length > 1 && (
+              <div className="mt-4">
+                <h4 className="text-sm font-medium text-neutral-400 mb-2">{language === 'ar' ? 'ملخص لكل ملف' : 'Per-file summary'}</h4>
+                <div className="space-y-2">
+                  {result.ocr.per_file.map((f, i) => (
+                    <div key={i} className="flex items-center justify-between bg-neutral-800/30 rounded px-3 py-2 text-sm">
+                      <span className="text-neutral-300 truncate">{f.file}</span>
+                      <div className="flex items-center gap-4 shrink-0">
+                        <span className="font-mono text-neutral-400">{f.engine}</span>
+                        <span className={`font-mono ${f.confidence >= 0.7 ? 'text-success-light' : f.confidence >= 0.5 ? 'text-warning-light' : 'text-danger-light'}`}>
+                          {Math.round(f.confidence * 100)}%
+                        </span>
+                        {f.fallback_triggered && (
+                          <Badge variant="warning" size="sm">fallback</Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      )}
 
       {result.entities && (
         <Card>
