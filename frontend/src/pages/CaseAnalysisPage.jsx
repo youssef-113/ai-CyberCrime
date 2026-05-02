@@ -11,7 +11,7 @@ import { formatFileSize, getGradeInfo, getCrimeTypeInfo, scoreToColor, scoreToBg
 import { FILE_CONSTRAINTS, SCORE_WEIGHTS, VERIFICATION_STATUS } from '../utils/constants'
 import { useTheme } from '../context/ThemeContext'
 import { getTranslation } from '../utils/translations'
-import toast from 'react-hot-toast'
+import { toastSuccess, toastError } from '../components/ui/Alert'
 
 const PIPELINE_STEPS_EN = ['Upload', 'OCR', 'Classify', 'RAG', 'Verify', 'Score', 'PDF']
 const PIPELINE_STEPS_AR = ['رفع', 'استخراج النص', 'تصنيف', 'استرجاع', 'تحقق', 'تقييم', 'تقرير']
@@ -60,13 +60,13 @@ export default function CaseAnalysisPage() {
     const invalidNew = newFiles.filter((f) => !f.valid)
 
     if (invalidNew.length > 0) {
-      toast.error(`${invalidNew.length} file(s) rejected: ${invalidNew[0].errors[0]}`)
+      toastError(`${invalidNew.length} file(s) rejected: ${invalidNew[0].errors[0]}`)
     }
 
     setFiles((prev) => {
       const combined = [...prev, ...validNew]
       if (combined.length > FILE_CONSTRAINTS.MAX_FILES) {
-        toast.error(`Maximum ${FILE_CONSTRAINTS.MAX_FILES} files`)
+        toastError(`Maximum ${FILE_CONSTRAINTS.MAX_FILES} files`)
         return combined.slice(0, FILE_CONSTRAINTS.MAX_FILES)
       }
       return combined
@@ -78,7 +78,7 @@ export default function CaseAnalysisPage() {
   const handleAnalyze = async () => {
     const validation = validateFileList(files.map((f) => f.file))
     if (!validation.valid) {
-      toast.error(validation.errors[0])
+      toastError(validation.errors[0])
       return
     }
 
@@ -94,10 +94,10 @@ export default function CaseAnalysisPage() {
       clearInterval(stepTimer)
       setPipelineStep(PIPELINE_STEPS.length - 1)
       setResult(data)
-      toast.success('Analysis complete!')
+      toastSuccess('Analysis complete!')
     } catch (err) {
       setPipelineStep(-1)
-      toast.error(error || 'Analysis failed')
+      toastError(error || 'Analysis failed')
     }
   }
 
@@ -105,9 +105,9 @@ export default function CaseAnalysisPage() {
     if (result?.case_id) {
       try {
         await download(result.case_id)
-        toast.success('PDF downloaded!')
+        toastSuccess('PDF downloaded!')
       } catch {
-        toast.error('Download failed')
+        toastError('Download failed')
       }
     }
   }
@@ -218,10 +218,22 @@ export default function CaseAnalysisPage() {
 function ResultView({ result, onDownload, onReset, downloading }) {
   const { language, isRtl } = useTheme()
   const t = (key) => getTranslation(language, key)
-  
+
   const gradeInfo = getGradeInfo(result.score?.total_score || 0)
   const crimeInfo = getCrimeTypeInfo(result.classification?.crime_type || 'unknown')
   const verificationStatus = VERIFICATION_STATUS[result.verification?.status] || VERIFICATION_STATUS.NEEDS_USER_REVIEW
+
+  // Safe helpers for nested OCR data
+  const ocrConf = result.ocr?.avg_confidence ?? result.ocr_confidence ?? 0
+  const ocrPerFile = result.ocr?.per_file || []
+  const ocrEngine = ocrPerFile[0]?.engine || 'easyocr'
+  const ocrLang = ocrPerFile[0]?.language || result.language || 'en'
+  const ocrFallback = ocrPerFile.some(f => f.fallback_triggered)
+  const pipelineErrors = result.pipeline_status?.errors || []
+  const isPartial = result.pipeline_status?.partial || false
+  const stagesCompleted = result.pipeline_status?.stages_completed || []
+
+  const langLabel = { ar: 'عربي', en: 'English', mixed: 'مختلط' }[ocrLang] || 'English'
 
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -241,6 +253,35 @@ function ResultView({ result, onDownload, onReset, downloading }) {
           </Button>
         </div>
       </div>
+
+      {/* Pipeline partial results warning */}
+      {isPartial && pipelineErrors.length > 0 && (
+        <Card className="border-l-4 border-l-warning">
+          <CardBody>
+            <div className="flex items-center gap-2 mb-3">
+              <AlertCircle className="w-5 h-5 text-warning" />
+              <h3 className="font-semibold text-warning-light">
+                {language === 'ar' ? 'بعض المراحل لم تكتمل' : 'Some pipeline stages did not complete'}
+              </h3>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {['ocr', 'classify', 'rag', 'verify'].map(stage => (
+                <Badge key={stage} variant={stagesCompleted.includes(stage) ? 'success' : 'danger'} size="sm">
+                  {{ ocr: 'OCR', classify: language === 'ar' ? 'تصنيف' : 'Classify', rag: 'RAG', verify: language === 'ar' ? 'تحقق' : 'Verify' }[stage]}
+                </Badge>
+              ))}
+            </div>
+            <ul className="space-y-1">
+              {pipelineErrors.map((err, i) => (
+                <li key={i} className="text-sm text-neutral-400">
+                  <span className="text-warning">{{ ocr: 'OCR', classify: 'Classify', rag: 'RAG', verify: 'Verify' }[err.stage] || err.stage}:</span>{' '}
+                  {err.error}
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
@@ -288,7 +329,7 @@ function ResultView({ result, onDownload, onReset, downloading }) {
                   <Cpu className="w-4 h-4 text-primary" />
                   <span className="text-sm font-medium text-neutral-300">{language === 'ar' ? 'محرك التعرف' : 'Engine'}</span>
                 </div>
-                <p className="text-sm font-mono">{result.ocr.per_file?.[0]?.engine || result.processing_metadata?.engine_used || 'easyocr'}</p>
+                <p className="text-sm font-mono">{ocrEngine}</p>
               </div>
               <div className="bg-neutral-800/50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -296,13 +337,10 @@ function ResultView({ result, onDownload, onReset, downloading }) {
                   <span className="text-sm font-medium text-neutral-300">{language === 'ar' ? 'ثقة التعرف' : 'OCR Confidence'}</span>
                 </div>
                 <p className={`text-sm font-mono ${
-                  (result.ocr.avg_confidence || result.ocr_confidence || 0) >= 0.7 ? 'text-success-light' :
-                  (result.ocr.avg_confidence || result.ocr_confidence || 0) >= 0.5 ? 'text-warning-light' : 'text-danger-light'
+                  ocrConf >= 0.7 ? 'text-success-light' : ocrConf >= 0.5 ? 'text-warning-light' : 'text-danger-light'
                 }`}>
-                  {Math.round((result.ocr.avg_confidence || result.ocr_confidence || 0) * 100)}%
-                  {result.ocr.per_file?.[0]?.confidence_score?.status &&
-                    ` (${result.ocr.per_file[0].confidence_score.status})`
-                  }
+                  {Math.round(ocrConf * 100)}%
+                  {ocrPerFile[0]?.confidence_score?.status && ` (${ocrPerFile[0].confidence_score.status})`}
                 </p>
               </div>
               <div className="bg-neutral-800/50 rounded-lg p-4">
@@ -311,7 +349,7 @@ function ResultView({ result, onDownload, onReset, downloading }) {
                   <span className="text-sm font-medium text-neutral-300">{language === 'ar' ? 'محرك بديل' : 'Fallback'}</span>
                 </div>
                 <p className="text-sm font-mono">
-                  {result.ocr.per_file?.some(f => f.fallback_triggered) ?
+                  {ocrFallback ?
                     (language === 'ar' ? 'نعم - تم استخدام PaddleOCR' : 'Yes — PaddleOCR used') :
                     (language === 'ar' ? 'لا - EasyOCR كافي' : 'No — EasyOCR sufficient')
                   }
@@ -322,22 +360,20 @@ function ResultView({ result, onDownload, onReset, downloading }) {
                   <FileText className="w-4 h-4 text-primary" />
                   <span className="text-sm font-medium text-neutral-300">{language === 'ar' ? 'اللغة' : 'Language'}</span>
                 </div>
-                <p className="text-sm font-mono">
-                  {{ ar: 'عربي', en: 'English', mixed: 'مختلط' }[result.ocr.per_file?.[0]?.language || result.language || 'en'] || 'English'}
-                </p>
+                <p className="text-sm font-mono">{langLabel}</p>
               </div>
             </div>
-            {result.ocr.per_file && result.ocr.per_file.length > 1 && (
+            {ocrPerFile.length > 1 && (
               <div className="mt-4">
                 <h4 className="text-sm font-medium text-neutral-400 mb-2">{language === 'ar' ? 'ملخص لكل ملف' : 'Per-file summary'}</h4>
                 <div className="space-y-2">
-                  {result.ocr.per_file.map((f, i) => (
+                  {ocrPerFile.map((f, i) => (
                     <div key={i} className="flex items-center justify-between bg-neutral-800/30 rounded px-3 py-2 text-sm">
-                      <span className="text-neutral-300 truncate">{f.file}</span>
+                      <span className="text-neutral-300 truncate">{f.file || `File ${i + 1}`}</span>
                       <div className="flex items-center gap-4 shrink-0">
-                        <span className="font-mono text-neutral-400">{f.engine}</span>
-                        <span className={`font-mono ${f.confidence >= 0.7 ? 'text-success-light' : f.confidence >= 0.5 ? 'text-warning-light' : 'text-danger-light'}`}>
-                          {Math.round(f.confidence * 100)}%
+                        <span className="font-mono text-neutral-400">{f.engine || '—'}</span>
+                        <span className={`font-mono ${(f.confidence || 0) >= 0.7 ? 'text-success-light' : (f.confidence || 0) >= 0.5 ? 'text-warning-light' : 'text-danger-light'}`}>
+                          {Math.round((f.confidence || 0) * 100)}%
                         </span>
                         {f.fallback_triggered && (
                           <Badge variant="warning" size="sm">fallback</Badge>
@@ -383,6 +419,32 @@ function ResultView({ result, onDownload, onReset, downloading }) {
                   )}
                 </div>
               ))}
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* RAG Metadata */}
+      {result.rag_meta && (
+        <Card>
+          <div className="px-6 py-4 border-b border-neutral-800 flex items-center gap-2">
+            <Scale className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold">{language === 'ar' ? 'تفاصيل الاسترجاع' : 'RAG Details'}</h2>
+          </div>
+          <CardBody>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-neutral-800/50 rounded-lg p-4">
+                <span className="text-sm font-medium text-neutral-300 block mb-1">{language === 'ar' ? 'استراتيجية البحث' : 'Query Strategy'}</span>
+                <p className="text-sm font-mono">{result.rag_meta.query_strategy || 'none'}</p>
+              </div>
+              <div className="bg-neutral-800/50 rounded-lg p-4">
+                <span className="text-sm font-medium text-neutral-300 block mb-1">{language === 'ar' ? 'ذاكرة التخزين المؤقت' : 'Cache'}</span>
+                <p className="text-sm font-mono">{result.rag_meta.cache_hit ? (language === 'ar' ? 'مطابق' : 'Hit') : (language === 'ar' ? 'غير مطابق' : 'Miss')}</p>
+              </div>
+              <div className="bg-neutral-800/50 rounded-lg p-4">
+                <span className="text-sm font-medium text-neutral-300 block mb-1">{language === 'ar' ? 'زمن الاستجابة' : 'Latency'}</span>
+                <p className="text-sm font-mono">{Math.round(result.rag_meta.latency_ms || 0)}ms</p>
+              </div>
             </div>
           </CardBody>
         </Card>

@@ -180,7 +180,7 @@ async def analyze_json(
 
     try:
         await create_case(user_id, case_id, len(files))
-        result = await run_pipeline(case_id, files)
+        result = await run_pipeline(case_id, files, user_id)
         await update_case(case_id, "completed", result)
         return result
     except Exception as e:
@@ -475,18 +475,22 @@ async def list_tenants(user_id: str = Depends(get_current_user_id)):
 async def process_pipeline(case_id: str, files: List[UploadFile], user_id: str):
     """Background pipeline processing"""
     try:
-        result = await run_pipeline(case_id, files)
+        result = await run_pipeline(case_id, files, user_id)
         await update_case(case_id, "completed", result)
     except Exception as e:
         await update_case(case_id, "failed", error=str(e))
 
-async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
-    """Execute full 6-stage pipeline"""
+async def run_pipeline(case_id: str, files: List[UploadFile], user_id: str = "default") -> dict:
+    """Execute full 6-stage pipeline with graceful degradation"""
     import logging
     logger = logging.getLogger("api.pipeline")
 
+    # Track which stages completed successfully
+    stages_completed = []
+    errors = []
+
     async with httpx.AsyncClient() as client:
-        # Stage 1: OCR & Entity Extraction (through service layer)
+        # ── Stage 1: OCR & Entity Extraction ──────────────────────────
         ocr_results = []
         ocr_blocks = []
         for file in files:
@@ -497,11 +501,10 @@ async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
                     files={"file": (file.filename, file_bytes, file.content_type)},
                     timeout=60.0
                 )
+                resp.raise_for_status()
                 ocr_data = resp.json()
                 ocr_results.append(ocr_data)
-                # Collect evidence blocks
                 ocr_blocks.extend(ocr_data.get("evidence_blocks", []))
-                # Log confidence + failures per file
                 meta = ocr_data.get("processing_metadata", {})
                 logger.info(
                     f"OCR: file={file.filename} engine={meta.get('engine_used')} "
@@ -511,19 +514,19 @@ async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
                 )
             except Exception as e:
                 logger.error(f"OCR failed for {file.filename}: {e}")
-                ocr_results.append({"full_text": "", "entities": {}, "avg_confidence": 0, "evidence_blocks": []})
+                errors.append({"stage": "ocr", "file": file.filename, "error": str(e)})
+                ocr_results.append({"full_text": "", "normalized_text": "", "entities": {}, "avg_confidence": 0, "evidence_blocks": [], "processing_metadata": {}, "language": "unknown"})
 
-        # Combine OCR results using structured fields
-        combined_text = " ".join([r.get("full_text", "") or r.get("normalized_text", "") for r in ocr_results])
+        # Combine OCR results
+        combined_text = " ".join([r.get("full_text", "") or r.get("normalized_text", "") for r in ocr_results]).strip()
         all_entities = merge_entities([r.get("entities", {}) for r in ocr_results])
         avg_confidence = sum([r.get("avg_confidence", 0) for r in ocr_results]) / max(len(ocr_results), 1)
 
-        # Collect OCR metadata for result
         ocr_metadata = {
             "avg_confidence": round(avg_confidence, 3),
             "evidence_blocks": ocr_blocks,
             "per_file": [{
-                "file": r.get("evidence_blocks", [{}])[0].get("file_name", "unknown") if r.get("evidence_blocks") else "unknown",
+                "file": (r.get("evidence_blocks") or [{}])[0].get("file_name", "unknown") if r.get("evidence_blocks") else "unknown",
                 "engine": r.get("processing_metadata", {}).get("engine_used", "unknown"),
                 "confidence": r.get("avg_confidence", 0),
                 "fallback_triggered": r.get("processing_metadata", {}).get("fallback_triggered", False),
@@ -532,66 +535,118 @@ async def run_pipeline(case_id: str, files: List[UploadFile]) -> dict:
             } for r in ocr_results],
         }
 
-        # Stage 2: Classification
-        classify_resp = await client.post(
-            f"{SERVICE_URLS['classifier']}/classify",
-            json={"text": combined_text, "entities": all_entities},
-            timeout=30.0
-        )
-        classification = classify_resp.json()
+        if combined_text:
+            stages_completed.append("ocr")
 
-        # Stage 3: RAG - Legal Retrieval (Production Pipeline)
-        rag_resp = await client.post(
-            f"{SERVICE_URLS['rag']}/retrieve",
-            json={
-                "query": combined_text[:500],
-                "crime_type": classification["crime_type"],
-                "top_k": 5,
-                "tenant_id": user_id,
-                "transform_strategy": "auto",
-            },
-            timeout=30.0
-        )
-        rag_data = rag_resp.json()
-        articles = rag_data.get("articles", [])
+        # ── Stage 2: Classification ───────────────────────────────────
+        classification = {
+            "crime_type": "unknown",
+            "confidence": 0.0,
+            "reasoning": "Classification service unavailable",
+            "suggested_articles": [],
+            "missing_evidence": [],
+        }
+        if combined_text:
+            try:
+                classify_resp = await client.post(
+                    f"{SERVICE_URLS['classifier']}/classify",
+                    json={"text": combined_text, "entities": all_entities},
+                    timeout=30.0
+                )
+                classify_resp.raise_for_status()
+                classification = classify_resp.json()
+                stages_completed.append("classify")
+            except Exception as e:
+                logger.error(f"Classification failed: {e}")
+                errors.append({"stage": "classify", "error": str(e)})
+        else:
+            errors.append({"stage": "classify", "error": "No text extracted from OCR"})
 
-        # Stage 4: Verification
-        verify_resp = await client.post(
-            f"{SERVICE_URLS['verification']}/verify",
-            json={
-                "evidence_text": combined_text,
-                "extracted_entities": all_entities,
-                "classification": classification,
-                "retrieved_articles": articles
-            },
-            timeout=60.0
-        )
-        verification = verify_resp.json()
+        # ── Stage 3: RAG - Legal Retrieval ────────────────────────────
+        articles = []
+        rag_meta = {"cache_hit": False, "query_strategy": "none", "latency_ms": 0}
+        if combined_text and classification.get("crime_type", "unknown") != "unknown":
+            try:
+                rag_resp = await client.post(
+                    f"{SERVICE_URLS['rag']}/retrieve",
+                    json={
+                        "query": combined_text[:500],
+                        "crime_type": classification.get("crime_type", ""),
+                        "top_k": 5,
+                        "tenant_id": user_id,
+                        "transform_strategy": "auto",
+                    },
+                    timeout=30.0
+                )
+                rag_resp.raise_for_status()
+                rag_data = rag_resp.json()
+                articles = rag_data.get("articles", [])
+                rag_meta = {
+                    "cache_hit": rag_data.get("cache_hit", False),
+                    "query_strategy": rag_data.get("query_strategy", "none"),
+                    "latency_ms": rag_data.get("latency_ms", 0),
+                }
+                stages_completed.append("rag")
+            except Exception as e:
+                logger.error(f"RAG retrieval failed: {e}")
+                errors.append({"stage": "rag", "error": str(e)})
+        else:
+            errors.append({"stage": "rag", "error": "No text or unknown crime type"})
 
-        # Stage 5: Build result
+        # ── Stage 4: Verification ─────────────────────────────────────
+        verification = {
+            "status": "NEEDS_USER_REVIEW",
+            "rounds": 0,
+            "final_score": 0,
+            "score_breakdown": {"grade": "WEAK"},
+            "timeline": [],
+        }
+        if combined_text and articles:
+            try:
+                verify_resp = await client.post(
+                    f"{SERVICE_URLS['verification']}/verify",
+                    json={
+                        "evidence_text": combined_text,
+                        "extracted_entities": all_entities,
+                        "classification": classification,
+                        "retrieved_articles": articles
+                    },
+                    timeout=60.0
+                )
+                verify_resp.raise_for_status()
+                verification = verify_resp.json()
+                stages_completed.append("verify")
+            except Exception as e:
+                logger.error(f"Verification failed: {e}")
+                errors.append({"stage": "verify", "error": str(e)})
+        else:
+            errors.append({"stage": "verify", "error": "Insufficient data for verification"})
+
+        # ── Build Final Result ────────────────────────────────────────
         result = {
             "case_id": case_id,
             "classification": classification,
             "entities": all_entities,
             "articles": articles,
-            "rag_meta": {
-                "cache_hit": rag_data.get("cache_hit", False),
-                "query_strategy": rag_data.get("query_strategy", "none"),
-                "latency_ms": rag_data.get("latency_ms", 0),
-            },
+            "rag_meta": rag_meta,
             "verification": {
-                "status": verification["status"],
-                "rounds": verification["rounds"]
+                "status": verification.get("status", "NEEDS_USER_REVIEW"),
+                "rounds": verification.get("rounds", 0)
             },
             "score": {
-                "total_score": verification["final_score"],
-                "grade": verification["score_breakdown"].get("grade", "WEAK"),
-                "breakdown": verification["score_breakdown"]
+                "total_score": verification.get("final_score", 0),
+                "grade": verification.get("score_breakdown", {}).get("grade", "WEAK"),
+                "breakdown": verification.get("score_breakdown", {})
             },
-            "timeline": verification["timeline"],
+            "timeline": verification.get("timeline", []),
             "ocr": ocr_metadata,
             "ocr_confidence": round(avg_confidence, 3),
-            "files_processed": len(files)
+            "files_processed": len(files),
+            "pipeline_status": {
+                "stages_completed": stages_completed,
+                "errors": errors,
+                "partial": len(errors) > 0,
+            }
         }
 
         return result

@@ -238,3 +238,175 @@
     @apply rounded-bl-2xl rounded-br-sm;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SweetAlert2 Theme — Cybercrime AI Design System
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Popup container */
+.cyber-alert-popup {
+  background: #0A0A0A !important;
+  border: 1px solid #262626 !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 8px 32px rgba(0, 189, 125, 0.15), 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+  font-family: 'Poppins', system-ui, sans-serif !important;
+  animation: cyberAlertIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+/* Title */
+.cyber-alert-title {
+  color: #FAFAFA !important;
+  font-weight: 600 !important;
+  font-size: 1.25rem !important;
+}
+
+/* Content text */
+.cyber-alert-content {
+  color: #A3A3A3 !important;
+  font-size: 0.9rem !important;
+}
+
+/* Icon colors matching app design */
+.cyber-alert-icon {
+  &.swal2-success {
+    border-color: #00BD7D !important;
+    .swal2-success-line-tip,
+    .swal2-success-line-long {
+      background: #00BD7D !important;
+    }
+    .swal2-success-ring {
+      border-color: rgba(0, 189, 125, 0.3) !important;
+    }
+    .swal2-success-circular-line-right,
+    .swal2-success-circular-line-left {
+      background: rgba(0, 189, 125, 0.05) !important;
+    }
+  }
+  &.swal2-error {
+    border-color: #DC2626 !important;
+    .swal2-x-mark-line-left,
+    .swal2-x-mark-line-right {
+      background: #DC2626 !important;
+    }
+  }
+  &.swal2-warning {
+    border-color: #D97706 !important;
+    .swal2-mark {
+      background: #D97706 !important;
+    }
+  }
+  &.swal2-info {
+    border-color: #3B82F6 !important;
+  }
+}
+
+/* Buttons */
+.cyber-alert-btn {
+  font-family: 'Poppins', system-ui, sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  border-radius: 0.5rem !important;
+  padding: 0.625rem 1.5rem !important;
+  transition: all 0.2s ease !important;
+  box-shadow: none !important;
+  letter-spacing: 0.01em !important;
+}
+
+.cyber-alert-btn-confirm {
+  background: #00BD7D !important;
+  color: #fff !important;
+  &:hover {
+    background: #1AD79F !important;
+    transform: scale(1.02) !important;
+    box-shadow: 0 0 20px rgba(0, 189, 125, 0.3) !important;
+  }
+  &:active {
+    transform: scale(0.98) !important;
+  }
+}
+
+.cyber-alert-btn-cancel {
+  background: #404040 !important;
+  color: #A3A3A3 !important;
+  &:hover {
+    background: #525252 !important;
+    color: #FAFAFA !important;
+  }
+}
+
+.cyber-alert-btn-deny {
+  background: #DC2626 !important;
+  color: #fff !important;
+  &:hover {
+    background: #EF4444 !important;
+    box-shadow: 0 0 20px rgba(220, 38, 38, 0.3) !important;
+  }
+}
+
+/* Close button */
+.cyber-alert-close {
+  color: #737373 !important;
+  &:hover {
+    color: #FAFAFA !important;
+  }
+}
+
+/* Timer progress bar */
+.swal2-timer-progress-bar {
+  background: rgba(0, 189, 125, 0.4) !important;
+  height: 3px !important;
+}
+
+/* Toast mode positioning */
+.swal2-toast {
+  .cyber-alert-popup {
+    border-radius: 0.75rem !important;
+    box-shadow: 0 4px 16px rgba(0, 189, 125, 0.1), 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+    animation: cyberToastIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  }
+}
+
+/* RTL support */
+[dir="rtl"] .swal2-popup {
+  direction: rtl;
+  text-align: right;
+}
+
+[dir="rtl"] .swal2-actions {
+  flex-direction: row-reverse;
+}
+
+/* ─── Animations ────────────────────────────────────────────────────── */
+
+@keyframes cyberAlertIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.85) translateY(-20px);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.03) translateY(0);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes cyberToastIn {
+  0% {
+    opacity: 0;
+    transform: translateX(100%) scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(-5%) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}

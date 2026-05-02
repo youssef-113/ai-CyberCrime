@@ -7,7 +7,7 @@ import Input from '../components/ui/Input'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { getTranslation } from '../utils/translations'
-import toast from 'react-hot-toast'
+import { toastSuccess } from '../components/ui/Alert'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -34,7 +34,7 @@ export default function LoginPage() {
 
     try {
       await login(email, password)
-      toast.success(t('auth.loginSuccess'))
+      toastSuccess(t('auth.loginSuccess'))
       navigate('/dashboard')
     } catch (err) {
       // Error is set in AuthContext
@@ -196,7 +196,7 @@ export default function LoginPage() {
               size="lg"
               onClick={() => {
                 loginAsDemo()
-                toast.success(t('auth.loginSuccess'))
+                toastSuccess(t('auth.loginSuccess'))
                 navigate('/dashboard')
               }}
             >
