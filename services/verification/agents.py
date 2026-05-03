@@ -10,7 +10,9 @@ from typing import List, Optional
 from .strategies import get_strategy
 from .timeline import build_validated_timeline, timeline_summary
 
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+LLM_API_KEY = os.getenv("GROQ_API_KEY", os.getenv("LLM_API_KEY", ""))
+LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1/chat/completions")
 
 
 async def run_verification_agents(
@@ -272,27 +274,28 @@ def _infer_status(raw: str) -> str:
 
 
 async def call_llm(prompt: str) -> str:
-    """Call LLM API"""
+    """Call Groq LLM API (OpenAI-compatible endpoint)."""
 
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
-                "https://api.anthropic.com/v1/messages",
+                LLM_BASE_URL,
                 headers={
-                    "x-api-key": LLM_API_KEY,
-                    "anthropic-version": "2023-06-01",
+                    "Authorization": f"Bearer {LLM_API_KEY}",
                     "content-type": "application/json",
                 },
                 json={
-                    "model": "claude-3-haiku-20240307",
+                    "model": LLM_MODEL,
                     "max_tokens": 500,
+                    "temperature": 0.3,
                     "messages": [{"role": "user", "content": prompt}],
                 },
                 timeout=30.0,
             )
 
             result = response.json()
-            return result.get("content", [{}])[0].get("text", "No response")
+            # OpenAI-compatible response format
+            return result.get("choices", [{}])[0].get("message", {}).get("content", "No response")
         except Exception as e:
             return f"Error: {str(e)}"
  
