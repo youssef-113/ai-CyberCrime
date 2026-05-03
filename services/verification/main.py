@@ -6,8 +6,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from graph import run_verification_graph
-from database import VerificationStore
+from .graph import run_verification_graph
+from .database import VerificationStore
 
 app = FastAPI(title="Verification Service", version="2.0.0")
 

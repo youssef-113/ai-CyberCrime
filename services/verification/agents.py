@@ -6,9 +6,9 @@ import time
 import httpx
 import os
 
-from typing import List, Dict, Optional
-from services.verification.strategies import get_strategy
-from services.verification.timeline import build_validated_timeline, timeline_summary
+from typing import List, Optional
+from .strategies import get_strategy
+from .timeline import build_validated_timeline, timeline_summary
 
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 

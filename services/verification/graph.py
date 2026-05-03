@@ -13,10 +13,10 @@ from typing import List, Optional, TypedDict
 
 from langgraph.graph import StateGraph, END
 
-from services.verification.agents import attacker_agent, judge_agent
-from services.verification.database import VerificationStore
-from services.verification.scoring import calculate_score
-from services.verification.timeline import build_validated_timeline
+from .agents import attacker_agent, judge_agent
+from .database import VerificationStore
+from .scoring import calculate_score
+from .timeline import build_validated_timeline
 
 
 # ── State definition ─────────────────────────────────────────────────────
@@ -53,6 +53,9 @@ class VerificationState(TypedDict, total=False):
     score_breakdown: dict
     grade: str
     timeline: dict
+
+    # ── internal (not serialized) ────────────────────────────────────
+    store: Optional[VerificationStore]
 
 
 # ── Node functions ───────────────────────────────────────────────────────
@@ -115,7 +118,7 @@ async def judge_node(state: VerificationState) -> dict:
         ]
 
     # ── persist to database ───────────────────────────────────────────
-    store: Optional[VerificationStore] = state.get("_store")  # type: ignore[attr-defined]
+    store: Optional[VerificationStore] = state.get("store")
     if store and state.get("case_id"):
         store.save_round(
             case_id=state["case_id"],
@@ -163,7 +166,7 @@ def should_continue(state: VerificationState) -> str:
 # ── Graph construction ──────────────────────────────────────────────────
 
 
-def build_verification_graph() -> StateGraph:
+def build_verification_graph():
     """Return a compiled LangGraph ``StateGraph`` for verification."""
     builder = StateGraph(VerificationState)
 
@@ -236,6 +239,7 @@ async def run_verification_graph(
         "score_breakdown": {},
         "grade": "",
         "timeline": {},
+        "store": store,
     }
 
     # LangGraph async invoke
@@ -245,9 +249,11 @@ async def run_verification_graph(
     score, breakdown = calculate_score(
         verification={
             "final_status": result.get("final_status", "NEEDS_USER_REVIEW"),
+            "crime_type": crime_type,
         },
         entities=entities,
         article_count=len(articles),
+        evidence_blocks=evidence_blocks,
     )
 
     timeline = build_validated_timeline(

@@ -13,7 +13,9 @@ class VerificationStore:
 
     def __init__(self, db_path: str = DEFAULT_DB_PATH):
         self.db_path = db_path
-        os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
+        db_dir = os.path.dirname(db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
         self._init_db()
 
     # ── connection helper ─────────────────────────────────────────────────
@@ -60,6 +62,10 @@ class VerificationStore:
                     FOREIGN KEY (case_id) REFERENCES verification_cases(case_id)
                 )
             """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_rounds_case_id "
+                "ON verification_rounds(case_id)"
+            )
             conn.commit()
 
     # ── case-level ops ────────────────────────────────────────────────────
