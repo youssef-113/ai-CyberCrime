@@ -225,12 +225,20 @@ Respond in valid JSON only:
 
     parsed = _parse_judge_json(raw_response)
 
+    # Validate confidence: must be 0.0–1.0 float
+    raw_conf = parsed.get("confidence")
+    try:
+        confidence = float(raw_conf)
+        confidence = max(0.0, min(1.0, confidence))
+    except (TypeError, ValueError):
+        confidence = 0.5  # default when LLM gives garbage
+
     return {
         "decision": parsed.get("decision", raw_response[:200]),
         "status": parsed.get("status", _infer_status(raw_response)),
         "articles_cited": parsed.get("articles_cited", []),
         "claims_to_drop": parsed.get("claims_to_drop", []),
-        "confidence": parsed.get("confidence"),
+        "confidence": confidence,
         "revised_claim": claim,
         "raw_response": raw_response,
         "prompt": prompt,

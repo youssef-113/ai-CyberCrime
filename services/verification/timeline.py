@@ -142,33 +142,47 @@ def _detect_gaps(events: List[dict]) -> List[dict]:
 def _resolve_block_date(
     block: dict,
     entities: dict,
+    evidence_text: str = "",
 ) -> Optional[datetime]:
     """
     Find the date for a block using:
     1. A date entity whose source_block matches this block's ID.
     2. Dates embedded directly in the block's normalised text.
     3. A 'date' field on the block itself.
+    4. Fallback: scan evidence_text for dates near this block's content.
     """
     block_id = block.get("block_id")
- 
+
     # 1. Named entity dates from the extraction layer
     for date_entity in entities.get("dates", []):
         if date_entity.get("source_block") == block_id:
             parsed = parse_date_flexible(date_entity.get("value", ""))
             if parsed:
                 return parsed
- 
+
     # 2. Inline text scan
     inline_dates = extract_dates_from_text(block.get("normalized_text", ""))
     for _raw, parsed in inline_dates:
         if parsed:
             return parsed
- 
+
     # 3. Direct field on block
     raw_field = block.get("date") or block.get("timestamp")
     if raw_field:
         return parse_date_flexible(str(raw_field))
- 
+
+    # 4. Fallback: try to match date entities without source_block to this block
+    #    by checking if the entity value appears in the evidence_text near block content
+    if evidence_text and block.get("normalized_text"):
+        snippet = block["normalized_text"][:50].lower()
+        for date_entity in entities.get("dates", []):
+            if date_entity.get("source_block"):  # already checked above
+                continue
+            date_val = date_entity.get("value", "")
+            parsed = parse_date_flexible(date_val)
+            if parsed and date_val in evidence_text:
+                return parsed
+
     return None
  
  
@@ -199,7 +213,7 @@ def build_validated_timeline(
     events: List[dict] = []
  
     for block in evidence_blocks:
-        resolved_date = _resolve_block_date(block, entities)
+        resolved_date = _resolve_block_date(block, entities, evidence_text)
  
         events.append(
             {

@@ -1,14 +1,35 @@
 from abc import ABC, abstractmethod
+import re
 from typing import List, Optional
- 
- 
+
+
+# ─────────────────────────────────────────────
+# Arabic text normalisation for keyword matching
+# ─────────────────────────────────────────────
+
+# Common Arabic character variants that should be treated as equivalent
+# Handles hamza forms (أ/إ/آ ≈ ا), taa marbuta (ة ≈ ه), etc.
+_ARABIC_NORMALIZE = str.maketrans(
+    {
+        "أ": "ا", "إ": "ا", "آ": "ا",  # hamza variants → bare alif
+        "ة": "ه",                        # taa marbuta → haa
+        "ى": "ي",                        # alif maqsura → yaa
+    }
+)
+
+
+def _normalize_arabic(text: str) -> str:
+    """Normalise Arabic text for fuzzy keyword matching."""
+    return text.translate(_ARABIC_NORMALIZE)
+
+
 # ─────────────────────────────────────────────
 # Base Strategy
 # ─────────────────────────────────────────────
- 
+
 class AttackerStrategy(ABC):
     """Abstract base class for all crime-type attacker strategies."""
- 
+
     @abstractmethod
     def generate_challenges(
         self,
@@ -17,13 +38,20 @@ class AttackerStrategy(ABC):
     ) -> List[str]:
         """Return a list of challenge strings that attack weak points in the claims."""
         pass
- 
+
     # ── shared helpers ──────────────────────────────────────────────────────
- 
+
     def _text_of(self, blocks: List[dict]) -> str:
         """Concatenate all normalised text from evidence blocks."""
-        return " ".join(b.get("normalized_text", "") for b in blocks).lower()
- 
+        raw = " ".join(b.get("normalized_text", "") for b in blocks).lower()
+        return _normalize_arabic(raw)
+
+    def _keyword_match(self, text: str, keywords: tuple) -> bool:
+        """Check if any keyword appears in text, with Arabic normalisation."""
+        norm_text = _normalize_arabic(text.lower())
+        norm_keywords = [_normalize_arabic(kw.lower()) for kw in keywords]
+        return any(kw in norm_text for kw in norm_keywords)
+
     def _claim_amounts(self, claims: List[dict]) -> List[float]:
         amounts = []
         for c in claims:
@@ -54,8 +82,8 @@ class FinancialFraudAttacker(AttackerStrategy):
     """Challenges for financial-fraud claims."""
  
     RECEIPT_KEYWORDS = (
-        "receipt", "transaction", "transfer", "wire", "إيصال",
-        "تحويل", "حوالة", "عملية", "رقم_العملية",
+        "receipt", "transaction", "transfer", "wire", "ايصال", "إيصال",
+        "تحويل", "حواله", "حوالة", "عمليه", "عملية",
     )
     FRAUD_KEYWORDS = (
         "fraud", "احتيال", "غش", "blacklisted", "suspended",
@@ -94,10 +122,10 @@ class FinancialFraudAttacker(AttackerStrategy):
     # ── internal checks ─────────────────────────────────────────────────────
  
     def _has_transaction_receipt(self, text: str) -> bool:
-        return any(kw in text for kw in self.RECEIPT_KEYWORDS)
+        return self._keyword_match(text, self.RECEIPT_KEYWORDS)
  
     def _has_verified_fraudulent_account(self, text: str) -> bool:
-        return any(kw in text for kw in self.FRAUD_KEYWORDS)
+        return self._keyword_match(text, self.FRAUD_KEYWORDS)
  
     def _amounts_consistent(self, claims: List[dict], evidence_blocks: List[dict]) -> bool:
         claim_amounts = self._claim_amounts(claims)
@@ -126,17 +154,17 @@ class BlackmailAttacker(AttackerStrategy):
     """Challenges for blackmail / extortion claims."""
  
     THREAT_KEYWORDS = (
-        "will expose", "will publish", "سأنشر", "سأكشف",
-        "unless", "إلا إذا", "demand", "أطالب", "pay or",
-        "ادفع وإلا",
+        "will expose", "will publish", "سأنشر", "سانشر", "سأكشف", "ساكشف",
+        "unless", "إلا إذا", "الا اذا", "demand", "أطالب", "اطالب", "pay or",
+        "ادفع وإلا", "ادفع والا",
     )
     CONTENT_KEYWORDS = (
-        "photo", "video", "صورة", "فيديو", "recording",
-        "تسجيل", "screenshot", "لقطة شاشة", "document", "وثيقة",
+        "photo", "video", "صورة", "صوره", "فيديو", "recording",
+        "تسجيل", "screenshot", "لقطة شاشة", "لقطه شاشه", "document", "وثيقة", "وثيقه",
     )
     DEMAND_KEYWORDS = (
         "pay", "transfer", "ادفع", "حول", "send money",
-        "أرسل", "جنيه", "egp", "dollar", "$", "€",
+        "أرسل", "ارسل", "جنيه", "egp", "dollar", "$", "€",
     )
  
     def generate_challenges(self, claims: List[dict], evidence_blocks: List[dict]) -> List[str]:
@@ -172,13 +200,13 @@ class BlackmailAttacker(AttackerStrategy):
     # ── internal checks ─────────────────────────────────────────────────────
  
     def _has_explicit_threat(self, text: str) -> bool:
-        return any(kw in text for kw in self.THREAT_KEYWORDS)
- 
+        return self._keyword_match(text, self.THREAT_KEYWORDS)
+
     def _has_content_reference(self, text: str) -> bool:
-        return any(kw in text for kw in self.CONTENT_KEYWORDS)
- 
+        return self._keyword_match(text, self.CONTENT_KEYWORDS)
+
     def _has_clear_demand(self, text: str) -> bool:
-        return any(kw in text for kw in self.DEMAND_KEYWORDS)
+        return self._keyword_match(text, self.DEMAND_KEYWORDS)
  
     def _has_communication_chain(self, evidence_blocks: List[dict]) -> bool:
         comm_types = {"whatsapp", "sms", "email", "chat", "message", "رسالة", "واتساب"}
@@ -217,23 +245,23 @@ class ForgeryAttacker(AttackerStrategy):
             )
  
         return challenges
- 
+
     def _has_original_document(self, evidence_blocks: List[dict]) -> bool:
         return any(b.get("is_original", False) for b in evidence_blocks)
- 
+
     def _has_expert_opinion(self, text: str) -> bool:
-        keywords = ("expert", "forensic", "خبير", "فحص", "تقرير خبرة")
-        return any(kw in text for kw in keywords)
- 
+        keywords = ("expert", "forensic", "خبير", "فحص", "تقرير خبره", "تقرير خبرة")
+        return self._keyword_match(text, keywords)
+
     def _has_issuing_authority_confirmation(self, text: str) -> bool:
-        keywords = ("authority", "ministry", "وزارة", "جهة إصدار", "official denial")
-        return any(kw in text for kw in keywords)
- 
- 
+        keywords = ("authority", "ministry", "وزاره", "وزارة", "جهه اصدار", "جهة إصدار", "official denial")
+        return self._keyword_match(text, keywords)
+
+
 # ─────────────────────────────────────────────
 # Harassment Strategy
 # ─────────────────────────────────────────────
- 
+
 class HarassmentAttacker(AttackerStrategy):
     """Challenges for harassment / stalking claims."""
  
@@ -266,7 +294,7 @@ class HarassmentAttacker(AttackerStrategy):
  
     def _has_witness_or_report(self, text: str) -> bool:
         keywords = ("witness", "شاهد", "police report", "بلاغ", "محضر")
-        return any(kw in text for kw in keywords)
+        return self._keyword_match(text, keywords)
  
     def _has_perpetrator_identity(self, evidence_blocks: List[dict]) -> bool:
         for b in evidence_blocks:

@@ -99,6 +99,15 @@ def calculate_score(
 
     total = sum(breakdown.values())
 
+    # Cap total based on verification outcome – unverified evidence can't be STRONG
+    if verification.get("final_status") == "APPROVED":
+        cap = 100
+    elif verification.get("final_status") == "NEEDS_REVISION":
+        cap = 65
+    else:
+        cap = 40
+    total = min(total, cap)
+
     # Determine grade
     if total >= 75:
         grade = "STRONG"
