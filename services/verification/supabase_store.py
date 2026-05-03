@@ -61,19 +61,33 @@ class SupabaseVerificationStore:
 
     # ── case-level ops ────────────────────────────────────────────────────
 
-    def create_case(self, case_id: str, crime_type: str) -> None:
+    def create_case(
+        self,
+        case_id: str,
+        crime_type: str,
+        user_id: Optional[str] = None,
+        source_case_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> None:
         sb = self._sb_or_fallback()
         if sb:
             try:
-                sb.table("verification_cases").insert({
+                data: Dict[str, any] = {
                     "case_id": case_id,
                     "crime_type": crime_type,
-                }).execute()
-                logger.debug("Supabase: created case %s", case_id)
+                }
+                if user_id:
+                    data["user_id"] = user_id
+                if source_case_id:
+                    data["source_case_id"] = source_case_id
+                if session_id:
+                    data["session_id"] = session_id
+                sb.table("verification_cases").insert(data).execute()
+                logger.debug("Supabase: created case %s (user=%s)", case_id, user_id)
             except Exception as e:
                 logger.error("Supabase create_case failed: %s – falling back to SQLite", e)
         # Always write to SQLite as local cache / fallback
-        self._sqlite.create_case(case_id, crime_type)
+        self._sqlite.create_case(case_id, crime_type, user_id, source_case_id, session_id)
 
     def update_case_status(
         self,
@@ -106,6 +120,9 @@ class SupabaseVerificationStore:
                     row = result.data[0]
                     return {
                         "case_id": row["case_id"],
+                        "user_id": row.get("user_id"),
+                        "source_case_id": row.get("source_case_id"),
+                        "session_id": row.get("session_id"),
                         "crime_type": row["crime_type"],
                         "created_at": row.get("created_at", ""),
                         "final_status": row.get("final_status"),
@@ -117,21 +134,26 @@ class SupabaseVerificationStore:
                 logger.error("Supabase get_case_summary failed: %s – falling back to SQLite", e)
         return self._sqlite.get_case_summary(case_id)
 
-    def list_cases(self, limit: int = 50, offset: int = 0) -> List[Dict]:
+    def list_cases(self, limit: int = 50, offset: int = 0, user_id: Optional[str] = None) -> List[Dict]:
         sb = self._sb_or_fallback()
         if sb:
             try:
-                result = (
+                query = (
                     sb.table("verification_cases")
                     .select("*")
                     .order("created_at", desc=True)
                     .limit(limit)
                     .offset(offset)
-                    .execute()
                 )
+                if user_id:
+                    query = query.eq("user_id", user_id)
+                result = query.execute()
                 return [
                     {
                         "case_id": r["case_id"],
+                        "user_id": r.get("user_id"),
+                        "source_case_id": r.get("source_case_id"),
+                        "session_id": r.get("session_id"),
                         "crime_type": r["crime_type"],
                         "created_at": r.get("created_at", ""),
                         "final_status": r.get("final_status"),
@@ -143,7 +165,7 @@ class SupabaseVerificationStore:
                 ]
             except Exception as e:
                 logger.error("Supabase list_cases failed: %s – falling back to SQLite", e)
-        return self._sqlite.list_cases(limit=limit, offset=offset)
+        return self._sqlite.list_cases(limit=limit, offset=offset, user_id=user_id)
 
     # ── round-level ops ──────────────────────────────────────────────────
 
@@ -155,11 +177,12 @@ class SupabaseVerificationStore:
         judge_data: Dict,
         status: str,
         latency_ms: int,
+        chat_message_id: Optional[str] = None,
     ) -> None:
         sb = self._sb_or_fallback()
         if sb:
             try:
-                sb.table("verification_rounds").upsert({
+                data = {
                     "case_id": case_id,
                     "round_num": round_num,
                     "attacker_prompt": attacker_data.get("prompt"),
@@ -172,11 +195,14 @@ class SupabaseVerificationStore:
                     "judge_claims_to_drop": judge_data.get("claims_to_drop", []),
                     "judge_confidence": judge_data.get("confidence"),
                     "latency_ms": latency_ms,
-                }, on_conflict="case_id,round_num").execute()
+                }
+                if chat_message_id:
+                    data["chat_message_id"] = chat_message_id
+                sb.table("verification_rounds").upsert(data, on_conflict="case_id,round_num").execute()
                 logger.debug("Supabase: saved round %d for case %s", round_num, case_id)
             except Exception as e:
                 logger.error("Supabase save_round failed: %s – falling back to SQLite", e)
-        self._sqlite.save_round(case_id, round_num, attacker_data, judge_data, status, latency_ms)
+        self._sqlite.save_round(case_id, round_num, attacker_data, judge_data, status, latency_ms, chat_message_id)
 
     def get_case_history(self, case_id: str) -> List[Dict]:
         sb = self._sb_or_fallback()

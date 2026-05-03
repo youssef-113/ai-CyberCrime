@@ -27,6 +27,9 @@ class VerificationState(TypedDict, total=False):
 
     # ── inputs ────────────────────────────────────────────────────────
     case_id: str
+    user_id: Optional[str]
+    source_case_id: Optional[str]
+    session_id: Optional[str]
     evidence_text: str
     entities: dict
     claims: List[dict]
@@ -43,6 +46,7 @@ class VerificationState(TypedDict, total=False):
     current_challenges: str
     current_structured_challenges: List[str]
     current_judge_result: dict
+    current_chat_message_id: Optional[str]
 
     # ── accumulated outputs ───────────────────────────────────────────
     verification_log: List[dict]
@@ -137,6 +141,7 @@ async def judge_node(state: VerificationState) -> dict:
             },
             status=result["status"],
             latency_ms=latency_ms,
+            chat_message_id=state.get("current_chat_message_id"),
         )
 
     new_log = state.get("verification_log", []) + [log_entry]
@@ -197,9 +202,17 @@ async def run_verification_graph(
     case_id: Optional[str] = None,
     store: Optional[VerificationStore] = None,
     max_rounds: int = 3,
+    user_id: Optional[str] = None,
+    source_case_id: Optional[str] = None,
+    session_id: Optional[str] = None,
 ) -> dict:
     """High-level entry point that builds initial state, runs the graph,
     then computes score and timeline.
+
+    Args:
+        user_id: UUID of the requesting user (from JWT/auth)
+        source_case_id: Main case_id from the cases table (parent case)
+        session_id: chat_sessions.session_id that triggered this verification
 
     Returns the same shape as ``run_verification_agents`` so callers
     (including ``main.py``) can switch transparently.
@@ -215,12 +228,21 @@ async def run_verification_graph(
         f"with confidence {classification.get('confidence', 0)}"
     )
 
-    # Create case in the audit store
+    # Create case in the audit store (with auth context)
     if store and case_id:
-        store.create_case(case_id, crime_type)
+        store.create_case(
+            case_id=case_id,
+            crime_type=crime_type,
+            user_id=user_id,
+            source_case_id=source_case_id,
+            session_id=session_id,
+        )
 
     initial_state: VerificationState = {
         "case_id": case_id or "",
+        "user_id": user_id,
+        "source_case_id": source_case_id,
+        "session_id": session_id,
         "evidence_text": evidence_text,
         "entities": entities,
         "claims": claims,
@@ -233,6 +255,7 @@ async def run_verification_graph(
         "current_challenges": "",
         "current_structured_challenges": [],
         "current_judge_result": {},
+        "current_chat_message_id": None,
         "verification_log": [],
         "final_status": "PENDING",
         "final_score": 0,

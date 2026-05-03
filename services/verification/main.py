@@ -39,6 +39,10 @@ class VerificationRequest(BaseModel):
     retrieved_articles: List[dict]
     evidence_blocks: Optional[List[dict]] = []
     case_id: Optional[str] = None
+    # Foreign keys to existing auth system
+    user_id: Optional[str] = None  # users.id
+    source_case_id: Optional[str] = None  # cases.case_id (parent case)
+    session_id: Optional[str] = None  # chat_sessions.session_id
 
 
 class VerificationRound(BaseModel):
@@ -65,6 +69,9 @@ class VerificationResponse(BaseModel):
 
 class CaseSummary(BaseModel):
     case_id: str
+    user_id: Optional[str] = None
+    source_case_id: Optional[str] = None
+    session_id: Optional[str] = None
     crime_type: str
     created_at: str
     final_status: Optional[str] = None
@@ -94,6 +101,9 @@ async def verify(request: VerificationRequest):
         evidence_blocks=request.evidence_blocks,
         case_id=case_id,
         store=store,
+        user_id=request.user_id,
+        source_case_id=request.source_case_id,
+        session_id=request.session_id,
     )
 
     return VerificationResponse(
@@ -112,9 +122,13 @@ async def verify(request: VerificationRequest):
 
 
 @app.get("/cases", response_model=List[CaseSummary])
-def list_cases(limit: int = 50, offset: int = 0):
-    """List all verification cases (newest first)."""
-    return store.list_cases(limit=limit, offset=offset)
+def list_cases(limit: int = 50, offset: int = 0, user_id: Optional[str] = None):
+    """List all verification cases (newest first).
+
+    Args:
+        user_id: Filter by specific user (for admin/audit use)
+    """
+    return store.list_cases(limit=limit, offset=offset, user_id=user_id)
 
 
 @app.get("/cases/{case_id}", response_model=CaseSummary)

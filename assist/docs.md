@@ -370,3 +370,205 @@ cd frontend && npm install && npm run dev
 - Frontend: http://localhost:3000
 - API: http://localhost:8000
 - Qdrant: http://localhost:6333
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         FRONTEND (React)                                    │
+│                    User uploads evidence / asks question                      │
+└───────────────────────────────┬───────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         API SERVICE (main backend)                          │
+│  @/home/youssef/projects/ai-Cybercrime/services/api/                        │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐             │
+│  │  Auth (JWT)     │  │  Case mgmt      │  │  Chat           │             │
+│  │  users table    │  │  cases table    │  │  sessions       │             │
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘             │
+│           │                    │                    │                       │
+│           └────────────────────┼────────────────────┘                       │
+│                                │                                            │
+│                    POST /verify (proxied or direct)                        │
+│                    with user_id, session_id, case_id                       │
+└───────────────────────────────┼────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    VERIFICATION SERVICE (standalone)                        │
+│  @/home/youssef/projects/ai-Cybercrime/services/verification/                │
+│                                                                              │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐                     │
+│  │  /verify    │───▶│  LangGraph  │───▶│  Supabase   │ ──┐                 │
+│  │  endpoint   │    │  State Mach │    │  (cloud)    │   │                 │
+│  └─────────────┘    └──────┬──────┘    └─────────────┘   │  Dual-write     │
+│                            │                             │                 │
+│                            ▼                             │                 │
+│                    ┌──────────────┐                      │                 │
+│                    │ attacker_node│                      │                 │
+│                    │  (challenges)│                      │                 │
+│                    └──────┬───────┘                      │                 │
+│                           │                              │                 │
+│                           ▼                              │                 │
+│                    ┌──────────────┐                      │                 │
+│                    │  judge_node  │                      │                 │
+│                    │  (verdict)   │                      │                 │
+│                    └──────┬───────┘                      │                 │
+│                           │                              │                 │
+│                    ┌──────┴───────┐                      │                 │
+│                    │ should_cont? │                      │                 │
+│                    └──────┬───────┘                      │                 │
+│                           │                              │                 │
+│              ┌────────────┴────────────┐                 │                 │
+│              │  APPROVED / max rounds   │───────────────▶│                 │
+│              │  NEEDS_REVISION ────────┼─(loop back)     │                 │
+│              └─────────────────────────┘                 │                 │
+│                                                           │                 │
+│  ┌───────────────────────────────────────────────────────┘                 │
+│  │  ┌─────────────────┐    ┌─────────────────┐                             │
+│  └──│  SQLite (local)│    │  Supabase (cloud)│◄──┐                         │
+│     │  verification.db│    │  PostgreSQL      │   │  verification_cases    │
+│     │  (fallback/cache)│  │  verification_rounds│   │                         │
+│     └─────────────────┘    └─────────────────┘   │                         │
+│                      Data saved to BOTH          │                         │
+└──────────────────────────────────────────────────┼─────────────────────────┘
+                                                   │
+                                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         SUPABASE (Shared Database)                            │
+│                                                                              │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
+│  │   users     │    │    cases    │    │chat_sessions│    │chat_messages│  │
+│  │   (auth)    │◄───┤  (parent)   │◄───┤  (context)  │◄───┤ (triggers)  │  │
+│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘    └──────┬──────┘  │
+│         │                   │                   │                   │      │
+│         │                   │                   │                   │      │
+│  ┌──────┴───────────────────┴───────────────────┴───────────────────┴──────┐  │
+│  │                    verification_cases                               │  │
+│  │  ─ user_id (FK → users.id)                                          │  │
+│  │  ─ source_case_id (FK → cases.case_id)                             │  │
+│  │  ─ session_id (FK → chat_sessions.session_id)                        │  │
+│  └────────────────────────────────┬─────────────────────────────────────┘  │
+│                                   │                                         │
+│  ┌────────────────────────────────┴─────────────────────────────────────┐  │
+│  │                    verification_rounds                               │  │
+│  │  ─ case_id (FK → verification_cases.case_id)                        │  │
+│  │  ─ chat_message_id (FK → chat_messages.id)                         │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  VIEW: verification_audit_trail (joins all tables for admin dashboard)      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         VERIFICATION GRAPH FLOW                               │
+│                                                                              │
+│  POST /verify with:                                                          │
+│  • evidence_text (the raw evidence)                                           │
+│  • extracted_entities (people, dates, amounts)                                │
+│  • classification (crime_type: "blackmail", confidence: 0.9)                  │
+│  • retrieved_articles (law articles from RAG)                                │
+│  • user_id, source_case_id, session_id (from auth context)                    │
+│                                                                              │
+│  STEP 1: INITIALIZE                                                           │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │  store.create_case(case_id, crime_type, user_id, source_case_id,      │ │
+│  │                    session_id)                                         │ │
+│  │                                                                         │ │
+│  │  ──▶ Supabase.verification_cases (cloud)                               │ │
+│  │  ──▶ SQLite.verification_cases (local cache)                           │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│                              │                                               │
+│                              ▼                                               │
+│  STEP 2: ATTACKER NODE                                                       │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │  attacker_agent()                                                       │ │
+│  │                                                                         │ │
+│  │  1. Pick strategy based on crime_type:                                   │ │
+│  │     • BlackmailAttacker → check for threats, demands                     │ │
+│  │     • FinancialFraudAttacker → check for transactions, invoices          │ │
+│  │     • ForgeryAttacker → check for document inconsistencies                 │ │
+│  │                                                                         │ │
+│  │  2. Generate structured challenges (keyword-based rules)                 │ │
+│  │     Example: "No explicit threat found in evidence"                      │ │
+│  │                                                                         │ │
+│  │  3. Call Groq LLM (llama-3.3-70b) for additional challenges              │ │
+│  │                                                                         │ │
+│  │  Output: {                                                                │ │
+│  │    combined_text: "structured + LLM challenges",                         │ │
+│  │    structured_challenges: ["list", "of", "challenges"]                   │ │
+│  │  }                                                                        │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│                              │                                               │
+│                              ▼                                               │
+│  STEP 3: JUDGE NODE                                                          │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │  judge_agent()                                                          │ │
+│  │                                                                         │ │
+│  │  1. Build timeline from evidence (dates extracted)                       │ │
+│  │                                                                         │ │
+│  │  2. Format prompt with:                                                │ │
+│  │     • Law articles (legal grounding)                                     │ │
+│  │     • Attacker challenges (what to verify)                               │ │
+│  │     • Evidence claims (what the user asserts)                              │ │
+│  │                                                                         │ │
+│  │  3. Call Groq LLM → expects JSON response:                               │ │
+│  │     {                                                                     │ │
+│  │       "decision": "detailed explanation",                                 │ │
+│  │       "status": "APPROVED|NEEDS_REVISION|NEEDS_USER_REVIEW",            │ │
+│  │       "articles_cited": ["Law 123", "Article 45"],                       │ │
+│  │       "claims_to_drop": ["unsupported claim 1"],                           │ │
+│  │       "confidence": 0.85                                                  │ │
+│  │     }                                                                     │ │
+│  │                                                                         │ │
+│  │  4. Validate confidence (clamp 0.0-1.0, default 0.5)                     │ │
+│  │                                                                         │ │
+│  │  5. Persist round: store.save_round()                                    │ │
+│  │     ──▶ Supabase.verification_rounds (with chat_message_id if provided)  │ │
+│  │     ──▶ SQLite.verification_rounds (local cache)                         │ │
+│  │                                                                         │ │
+│  │  6. Drop unsupported claims from claim list                              │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│                              │                                               │
+│                              ▼                                               │
+│  STEP 4: DECISION                                                            │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │  should_continue():                                                      │ │
+│  │                                                                         │ │
+│  │  IF status == "APPROVED" → END (success)                                 │ │
+│  │  IF status == "NEEDS_REVISION" AND round < max_rounds → LOOP (step 2)     │ │
+│  │  IF max rounds reached → END (NEEDS_USER_REVIEW)                          │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│                              │                                               │
+│                              ▼                                               │
+│  STEP 5: FINALIZE                                                            │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │  calculate_score():                                                     │ │
+│  │    • Evidence strength (0-100)                                          │ │
+│  │    • Article alignment (0-20)                                           │ │
+│  │    • Confidence bonus (0-10)                                            │ │
+│  │    • Cap score based on final_status:                                    │ │
+│  │      APPROVED = 100 cap, NEEDS_REVISION = 65 cap, else 40 cap           │ │
+│  │    • Grade: STRONG (75+), MEDIUM (45+), WEAK (<45)                       │ │
+│  │                                                                         │ │
+│  │  build_validated_timeline():                                            │ │
+│  │    • Extract dates from evidence                                         │ │
+│  │    • Detect gaps between events                                          │ │
+│  │    • Calculate date_coverage %                                          │ │
+│  │                                                                         │ │
+│  │  store.update_case_status():                                            │ │
+│  │    ──▶ Supabase.verification_cases (final_status, final_score, grade)    │ │
+│  │    ──▶ SQLite.verification_cases (local cache)                           │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│                              │                                               │
+│                              ▼                                               │
+│  RESPONSE:                                                                    │
+│  {                                                                           │
+│    "case_id": "uuid",                                                        │
+│    "status": "APPROVED|NEEDS_REVISION|NEEDS_USER_REVIEW",                     │
+│    "rounds": 3,                                                              │
+│    "round_details": [...],                                                   │
+│    "final_score": 87,                                                        │
+│    "score_breakdown": {...},                                                 │
+│    "grade": "STRONG",                                                         │
+│    "timeline": {"events": [...], "gaps": [...], "date_coverage": 0.8}        │
+│  }                                                                            │
+└─────────────────────────────────────────────────────────────────────────────┘

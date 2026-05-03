@@ -34,6 +34,9 @@ class VerificationStore:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS verification_cases (
                     case_id       TEXT PRIMARY KEY,
+                    user_id       TEXT,
+                    source_case_id TEXT,
+                    session_id    TEXT,
                     crime_type    TEXT NOT NULL,
                     created_at    TEXT NOT NULL,
                     final_status  TEXT,
@@ -47,6 +50,7 @@ class VerificationStore:
                     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
                     case_id             TEXT    NOT NULL,
                     round_num           INTEGER NOT NULL,
+                    chat_message_id     TEXT,
                     timestamp           TEXT    NOT NULL,
                     attacker_prompt     TEXT,
                     attacker_response   TEXT,
@@ -70,12 +74,20 @@ class VerificationStore:
 
     # ── case-level ops ────────────────────────────────────────────────────
 
-    def create_case(self, case_id: str, crime_type: str) -> None:
+    def create_case(
+        self,
+        case_id: str,
+        crime_type: str,
+        user_id: Optional[str] = None,
+        source_case_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> None:
         with self._conn() as conn:
             conn.execute(
-                "INSERT OR IGNORE INTO verification_cases (case_id, crime_type, created_at) "
-                "VALUES (?, ?, ?)",
-                (case_id, crime_type, datetime.now(timezone.utc).isoformat()),
+                """INSERT OR IGNORE INTO verification_cases
+                    (case_id, user_id, source_case_id, session_id, crime_type, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)""",
+                (case_id, user_id, source_case_id, session_id, crime_type, datetime.now(timezone.utc).isoformat()),
             )
             conn.commit()
 
@@ -103,13 +115,20 @@ class VerificationStore:
             ).fetchone()
             return dict(row) if row else None
 
-    def list_cases(self, limit: int = 50, offset: int = 0) -> List[Dict]:
+    def list_cases(self, limit: int = 50, offset: int = 0, user_id: Optional[str] = None) -> List[Dict]:
         with self._conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM verification_cases "
-                "ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (limit, offset),
-            ).fetchall()
+            if user_id:
+                rows = conn.execute(
+                    "SELECT * FROM verification_cases WHERE user_id = ? "
+                    "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                    (user_id, limit, offset),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM verification_cases "
+                    "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                    (limit, offset),
+                ).fetchall()
             return [dict(r) for r in rows]
 
     # ── round-level ops ──────────────────────────────────────────────────
@@ -122,21 +141,23 @@ class VerificationStore:
         judge_data: Dict,
         status: str,
         latency_ms: int,
+        chat_message_id: Optional[str] = None,
     ) -> None:
         with self._conn() as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO verification_rounds
-                    (case_id, round_num, timestamp,
+                    (case_id, round_num, chat_message_id, timestamp,
                      attacker_prompt, attacker_response, attacker_challenges,
                      judge_prompt, judge_response, judge_status,
                      judge_articles_cited, judge_claims_to_drop, judge_confidence,
                      latency_ms)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     case_id,
                     round_num,
+                    chat_message_id,
                     datetime.now(timezone.utc).isoformat(),
                     attacker_data.get("prompt"),
                     attacker_data.get("response"),
