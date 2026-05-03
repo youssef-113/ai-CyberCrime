@@ -6,6 +6,7 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import { ProgressBar, PipelineProgress, Spinner } from '../components/ui/ProgressIndicator'
 import { useAnalyze, usePdfDownload } from '../api/hooks'
+import { VerificationSection } from '../components/verification'
 import { validateFile, validateFileList } from '../utils/validators'
 import { formatFileSize, getGradeInfo, getCrimeTypeInfo, scoreToColor, scoreToBgColor } from '../utils/formatters'
 import { FILE_CONSTRAINTS, SCORE_WEIGHTS, VERIFICATION_STATUS } from '../utils/constants'
@@ -523,6 +524,20 @@ function ResultView({ result, onDownload, onReset, downloading }) {
           </CardBody>
         </Card>
       )}
+
+      {/* Verification Section - Full detailed verification results */}
+      <VerificationSection
+        caseId={result.case_id}
+        result={result}
+        caseData={{
+          evidence_text: result.ocr ? result.ocr.per_file?.map(f => f.full_text).join(' ') : '',
+          entities: result.entities,
+          classification: result.classification,
+          articles: result.articles,
+          evidence_blocks: result.ocr?.evidence_blocks || result.ocr?.per_file || [],
+          session_id: null, // Could be passed from chat context if available
+        }}
+      />
     </div>
   )
 }
