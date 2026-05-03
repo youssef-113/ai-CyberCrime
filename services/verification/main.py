@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .graph import run_verification_graph
-from .database import VerificationStore
+from .supabase_store import SupabaseVerificationStore
+from .database import VerificationStore as SQLiteStore
 
 app = FastAPI(title="Verification Service", version="2.0.0")
 
@@ -19,7 +20,13 @@ app.add_middleware(
 )
 
 # ── Audit store (module-level singleton) ─────────────────────────────────
-store = VerificationStore()
+# Uses Supabase when env vars are set, falls back to local SQLite
+import os as _os
+
+if _os.getenv("SUPABASE_URL") and (_os.getenv("SUPABASE_SERVICE_KEY") or _os.getenv("SUPABASE_KEY")):
+    store = SupabaseVerificationStore()
+else:
+    store = SQLiteStore()
 
 
 # ── Request / Response models ────────────────────────────────────────────

@@ -4,3 +4,4 @@ httpx==0.25.0
 pydantic==2.5.0
 langgraph>=0.2.0
 python-dotenv>=1.0.0
+supabase>=2.0.0
