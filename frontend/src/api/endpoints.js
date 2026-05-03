@@ -147,12 +147,50 @@ export const indexArticles = async (articles, tenantId = 'default', asyncIngest 
   return response.data
 }
 
-export const verifyEvidence = async (evidenceText, entities, classification, articles) => {
+export const verifyEvidence = async (evidenceText, entities, classification, articles, evidenceBlocks = [], caseId = null, sessionId = null) => {
   const response = await client.post('/verify', {
     evidence_text: evidenceText,
     extracted_entities: entities,
     classification,
     retrieved_articles: articles,
+    evidence_blocks: evidenceBlocks,
+    case_id: caseId,
+    session_id: sessionId,
+  })
+  return response.data
+}
+
+// Verification audit endpoints
+export const getVerifications = async (params = {}) => {
+  const response = await client.get('/verifications', { params })
+  return response.data
+}
+
+export const getVerificationById = async (verificationId) => {
+  const response = await client.get(`/verifications/${verificationId}`)
+  return response.data
+}
+
+export const getVerificationRounds = async (verificationId) => {
+  const response = await client.get(`/verifications/${verificationId}/rounds`)
+  return response.data
+}
+
+export const getVerificationAudit = async (verificationId) => {
+  const response = await client.get(`/verifications/${verificationId}/audit`)
+  return response.data
+}
+
+// Trigger verification from existing case (for "Verify" button in case view)
+export const triggerCaseVerification = async (caseId, caseData) => {
+  const response = await client.post('/verify', {
+    evidence_text: caseData.evidence_text || caseData.text,
+    extracted_entities: caseData.entities || {},
+    classification: caseData.classification || { crime_type: 'unknown', confidence: 0 },
+    retrieved_articles: caseData.articles || [],
+    evidence_blocks: caseData.evidence_blocks || [],
+    case_id: caseId,
+    session_id: caseData.session_id || null,
   })
   return response.data
 }

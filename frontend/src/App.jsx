@@ -12,6 +12,7 @@ import CaseAnalysisPage from './pages/CaseAnalysisPage'
 import ChatbotPage from './pages/ChatbotPage'
 import CaseHistoryPage from './pages/CaseHistoryPage'
 import SettingsPage from './pages/SettingsPage'
+import VerificationsPage from './pages/VerificationsPage'
 
 function App() {
   return (
@@ -42,6 +43,9 @@ function App() {
                 } />
                 <Route path="/settings" element={
                   <ProtectedRoute><SettingsPage /></ProtectedRoute>
+                } />
+                <Route path="/verifications" element={
+                  <ProtectedRoute><VerificationsPage /></ProtectedRoute>
                 } />
               </Route>
 

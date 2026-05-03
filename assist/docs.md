@@ -572,3 +572,87 @@ cd frontend && npm install && npm run dev
 │    "timeline": {"events": [...], "gaps": [...], "date_coverage": 0.8}        │
 │  }                                                                            │
 └─────────────────────────────────────────────────────────────────────────────┘
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+┌──────────────────┐         ┌──────────────────────┐
+│     users        │         │   verification_cases │
+│──────────────────│         │──────────────────────│
+│ id (UUID PK)     │◄────────┤ user_id (FK)        │
+│ email            │         │ case_id (PK)         │
+│ full_name        │         │ source_case_id (FK)  │
+└──────────────────┘         │ session_id (FK)      │
+         ▲                   │ crime_type           │
+         │                   │ final_status         │
+┌──────────────────┐         │ grade                │
+│      cases       │         └──────────────────────┘
+│──────────────────│                    │
+│ case_id (VARCHAR)│◄───────────────────┘
+│ user_id (FK)     │
+│ status           │
+└──────────────────┘
+         ▲
+         │
+┌──────────────────┐
+│ chat_sessions    │
+│──────────────────│
+│ session_id (PK)  │◄───────────────────┐
+│ user_id (FK)     │                    │
+│ title            │                    │
+└──────────────────┘                    │
+                                        │
+┌──────────────────┐                    │
+│  chat_messages   │                    │
+│──────────────────│                    │
+│ id (UUID PK)     │◄───────────────────┤
+│ session_id (FK)  │                    │
+│ content          │         ┌──────────┴──────────┐
+└──────────────────┘         │ verification_rounds │
+                             │─────────────────────│
+                             │ case_id (FK)        │
+                             │ round_num           │
+                             │ chat_message_id(FK)│
+                             │ judge_status        │
+                             │ latency_ms          │
+                             └─────────────────────┘
+
+                             
+Data Persistence — Where Everything Gets Saved
+Supabase (Primary/Cloud)
+Table	Purpose	Foreign Keys
+verification_cases	One row per verification request	user_id → users.id, source_case_id → cases.case_id, session_id → chat_sessions.session_id
+verification_rounds	One row per attacker+judge round	case_id → verification_cases.case_id, chat_message_id → chat_messages.id
+SQLite (Local Cache/Fallback)
+Table	Purpose	Location
+verification_cases	Mirror of Supabase data	services/verification/data/verification.db
+verification_rounds	Mirror of Supabase data	Same file
+Why both?
+
+Supabase: Cloud persistence, survives container restarts, accessible from multiple services, audit dashboard
+SQLite: Local cache for performance, works offline if Supabase is down, no latency for reads
+Connection to API Services
+The verification service can operate in two modes:
+
+Mode 1: Standalone (Current)
+Frontend ──▶ Verification Service (port 8004) ──▶ Supabase
+                (no API service involved)
+Mode 2: Via API Gateway (Recommended for production)
+Frontend ──▶ API Service (port 8000) ──▶ Verification Service (port 8004)
+                │                              │
+                │                              ▼
+                │                         Supabase
+                ▼
+           cases table (parent case record)
+           chat_sessions (session context)
+

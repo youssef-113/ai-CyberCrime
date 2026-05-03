@@ -11,6 +11,7 @@ const navItems = [
   { path: '/dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard' },
   { path: '/analyze', icon: Search, labelKey: 'nav.newCase' },
   { path: '/history', icon: FileText, labelKey: 'nav.caseHistory' },
+  { path: '/verifications', icon: Shield, labelKey: 'nav.verifications' },
   { path: '/chatbot', icon: MessageSquare, labelKey: 'nav.legalChat' },
   { path: '/settings', icon: Settings, labelKey: 'nav.settings' },
 ]

@@ -224,6 +224,178 @@ async def download_pdf(
 
 
 # ══════════════════════════════════════════════════════════════════════════
+#  VERIFICATION ROUTES (protected, user-scoped, linked to cases/sessions)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class VerificationRequest(BaseModel):
+    """Request body for standalone verification (not part of full pipeline)"""
+    evidence_text: str
+    extracted_entities: dict
+    classification: dict
+    retrieved_articles: List[dict]
+    evidence_blocks: Optional[List[dict]] = []
+    case_id: Optional[str] = None
+    session_id: Optional[str] = None
+
+@app.post("/verify")
+async def verify_evidence(
+    request: VerificationRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Run standalone verification with user scoping.
+    Creates audit trail linked to user, case, and session.
+    """
+    import uuid as uuid_module
+    
+    # Generate verification case ID if not provided
+    verification_case_id = request.case_id or f"v-{uuid_module.uuid4().hex[:8]}"
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{SERVICE_URLS['verification']}/verify",
+                json={
+                    "evidence_text": request.evidence_text,
+                    "extracted_entities": request.extracted_entities,
+                    "classification": request.classification,
+                    "retrieved_articles": request.retrieved_articles,
+                    "evidence_blocks": request.evidence_blocks,
+                    "case_id": verification_case_id,
+                    "user_id": user_id,
+                    "source_case_id": request.case_id,  # Link to parent case if provided
+                    "session_id": request.session_id,
+                },
+                timeout=90.0,
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="Verification service timeout")
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Verification service error: {str(e)}")
+
+@app.get("/verifications")
+async def list_verifications(
+    limit: int = 50,
+    offset: int = 0,
+    user_id: str = Depends(get_current_user_id),
+):
+    """List all verification cases for the current user."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(
+                f"{SERVICE_URLS['verification']}/cases",
+                params={"limit": limit, "offset": offset, "user_id": user_id},
+                timeout=10.0,
+            )
+            resp.raise_for_status()
+            return {"verifications": resp.json()}
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Verification service error: {str(e)}")
+
+@app.get("/verifications/{verification_id}")
+async def get_verification(
+    verification_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Get a specific verification case summary."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(
+                f"{SERVICE_URLS['verification']}/cases/{verification_id}",
+                timeout=10.0,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            
+            # Verify user ownership (or allow if user_id is null - service role created)
+            if data.get("user_id") and data["user_id"] != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to view this verification")
+            
+            return data
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise HTTPException(status_code=404, detail="Verification not found")
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Verification service error: {str(e)}")
+
+@app.get("/verifications/{verification_id}/rounds")
+async def get_verification_rounds(
+    verification_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Get full round-by-round audit trail for a verification."""
+    async with httpx.AsyncClient() as client:
+        try:
+            # First verify ownership
+            summary_resp = await client.get(
+                f"{SERVICE_URLS['verification']}/cases/{verification_id}",
+                timeout=10.0,
+            )
+            summary_resp.raise_for_status()
+            summary = summary_resp.json()
+            
+            if summary.get("user_id") and summary["user_id"] != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to view this verification")
+            
+            # Get rounds
+            rounds_resp = await client.get(
+                f"{SERVICE_URLS['verification']}/cases/{verification_id}/rounds",
+                timeout=10.0,
+            )
+            rounds_resp.raise_for_status()
+            return {"verification_id": verification_id, "rounds": rounds_resp.json()}
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise HTTPException(status_code=404, detail="Verification not found")
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Verification service error: {str(e)}")
+
+@app.get("/verifications/{verification_id}/audit")
+async def get_verification_audit(
+    verification_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Get comprehensive audit including case summary and all rounds."""
+    async with httpx.AsyncClient() as client:
+        try:
+            # Get summary
+            summary_resp = await client.get(
+                f"{SERVICE_URLS['verification']}/cases/{verification_id}",
+                timeout=10.0,
+            )
+            summary_resp.raise_for_status()
+            summary = summary_resp.json()
+            
+            if summary.get("user_id") and summary["user_id"] != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized")
+            
+            # Get rounds
+            rounds_resp = await client.get(
+                f"{SERVICE_URLS['verification']}/cases/{verification_id}/rounds",
+                timeout=10.0,
+            )
+            rounds = rounds_resp.json() if rounds_resp.status_code == 200 else []
+            
+            return {
+                "verification": summary,
+                "rounds": rounds,
+                "audit_summary": {
+                    "total_rounds": len(rounds),
+                    "crime_type": summary.get("crime_type"),
+                    "final_status": summary.get("final_status"),
+                    "final_score": summary.get("final_score"),
+                    "grade": summary.get("grade"),
+                    "created_at": summary.get("created_at"),
+                }
+            }
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Verification service error: {str(e)}")
+
+# ══════════════════════════════════════════════════════════════════════════
 #  CHAT ROUTES (protected, user-scoped)
 # ══════════════════════════════════════════════════════════════════════════
 
@@ -609,7 +781,12 @@ async def run_pipeline(case_id: str, files: List[UploadFile], user_id: str = "de
                         "evidence_text": combined_text,
                         "extracted_entities": all_entities,
                         "classification": classification,
-                        "retrieved_articles": articles
+                        "retrieved_articles": articles,
+                        "evidence_blocks": ocr_blocks,
+                        "case_id": f"v-{case_id}",
+                        "user_id": user_id,
+                        "source_case_id": case_id,
+                        "session_id": None,  # Could be linked to a chat session if triggered from chat
                     },
                     timeout=60.0
                 )
