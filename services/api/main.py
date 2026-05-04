@@ -412,7 +412,10 @@ async def chat(
     case_context: Optional[dict] = None,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Send a chat message - user-scoped with persistence."""
+    """Send a chat message - user-scoped with persistence and RAG-enhanced context."""
+    import logging
+    logger = logging.getLogger("api.chat")
+
     # Ensure session belongs to user
     sessions = await get_user_sessions(user_id)
     user_session_ids = [s["session_id"] for s in sessions]
@@ -424,6 +427,42 @@ async def chat(
     # Save user message
     await save_chat_message(session_id, "user", user_message)
 
+    # ── Retrieve from User's Personal RAG Collection ─────────────────
+    user_documents = []
+    try:
+        async with httpx.AsyncClient() as client:
+            rag_resp = await client.post(
+                f"{SERVICE_URLS['rag']}/retrieve",
+                json={
+                    "query": user_message,
+                    "crime_type": case_context.get("classification", {}).get("crime_type", "") if case_context else "",
+                    "top_k": 5,
+                    "tenant_id": f"user_{user_id}",
+                    "transform_strategy": "auto",
+                },
+                timeout=15.0,
+            )
+            if rag_resp.status_code == 200:
+                rag_data = rag_resp.json()
+                user_documents = rag_data.get("articles", [])
+                logger.info(f"Retrieved {len(user_documents)} user documents for chat")
+    except Exception as e:
+        logger.warning(f"User RAG retrieval failed (non-critical): {e}")
+
+    # Merge user documents into case_context for chatbot
+    enhanced_context = case_context or {}
+    if user_documents:
+        if "user_documents" not in enhanced_context:
+            enhanced_context["user_documents"] = []
+        enhanced_context["user_documents"].extend([
+            {
+                "text": doc.get("text", ""),
+                "source": doc.get("metadata", {}).get("file_name", "uploaded_file"),
+                "relevance_score": doc.get("relevance_score", 0),
+            }
+            for doc in user_documents
+        ])
+
     # Forward to chatbot service
     async with httpx.AsyncClient() as client:
         try:
@@ -432,7 +471,7 @@ async def chat(
                 json={
                     "session_id": session_id,
                     "user_message": user_message,
-                    "case_context": case_context,
+                    "case_context": enhanced_context,
                 },
                 timeout=60.0,
             )
@@ -446,6 +485,61 @@ async def chat(
     await save_chat_message(session_id, "assistant", reply_text, citations)
 
     return reply_data
+
+
+@app.post("/chat/upload")
+async def chat_upload_documents(
+    files: List[UploadFile] = File(...),
+    session_id: str = "",
+    user_id: str = Depends(get_current_user_id),
+):
+    """Upload documents directly for chat (bypasses full analysis pipeline)."""
+    import logging
+    logger = logging.getLogger("api.chat")
+
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+
+    # Ensure session exists
+    if session_id:
+        sessions = await get_user_sessions(user_id)
+        user_session_ids = [s["session_id"] for s in sessions]
+        if session_id not in user_session_ids:
+            await create_chat_session(user_id, session_id)
+
+    # Process files with OCR
+    ocr_results = []
+    async with httpx.AsyncClient() as client:
+        for file in files:
+            file_bytes = await file.read()
+            try:
+                resp = await client.post(
+                    f"{SERVICE_URLS['ocr']}/extract",
+                    files={"file": (file.filename, file_bytes, file.content_type)},
+                    timeout=60.0
+                )
+                resp.raise_for_status()
+                ocr_data = resp.json()
+                ocr_results.append(ocr_data)
+            except Exception as e:
+                logger.error(f"OCR failed for {file.filename}: {e}")
+
+    # Index into user's RAG collection
+    indexed_count = 0
+    if ocr_results:
+        index_result = await index_user_documents(
+            ocr_results,
+            user_id,
+            session_id or f"chat_upload_{uuid.uuid4().hex[:8]}"
+        )
+        indexed_count = index_result.get("indexed", 0)
+
+    return {
+        "indexed": indexed_count,
+        "files_processed": len(ocr_results),
+        "session_id": session_id,
+        "message": f"Uploaded {len(files)} file(s). {indexed_count} document chunks indexed for chat."
+    }
 
 @app.post("/chat/reset")
 async def reset_chat(
@@ -652,6 +746,73 @@ async def process_pipeline(case_id: str, files: List[UploadFile], user_id: str):
     except Exception as e:
         await update_case(case_id, "failed", error=str(e))
 
+async def index_user_documents(ocr_results: list, user_id: str, case_id: str) -> dict:
+    """Index OCR'd user documents into RAG for chatbot retrieval."""
+    import logging
+    logger = logging.getLogger("api.pipeline")
+
+    if not ocr_results or not user_id:
+        return {"indexed": 0, "error": "No documents or user_id"}
+
+    documents = []
+    for i, ocr in enumerate(ocr_results):
+        text = ocr.get("full_text", "") or ocr.get("normalized_text", "")
+        if not text:
+            continue
+
+        # Create document chunks from evidence blocks
+        blocks = ocr.get("evidence_blocks", [])
+        for block in blocks:
+            block_text = block.get("normalized_text", "") or block.get("raw_text", "")
+            if block_text:
+                documents.append({
+                    "text": block_text,
+                    "metadata": {
+                        "source": "user_upload",
+                        "case_id": case_id,
+                        "file_name": block.get("file_name", f"file_{i}"),
+                        "block_id": block.get("block_id", f"block_{i}"),
+                        "doc_type": "evidence",
+                        "user_id": user_id,
+                    }
+                })
+
+        # Also index full text as a document
+        if text and len(text) > 50:
+            documents.append({
+                "text": text[:3000],  # Limit chunk size
+                "metadata": {
+                    "source": "user_upload",
+                    "case_id": case_id,
+                    "file_name": blocks[0].get("file_name", f"file_{i}") if blocks else f"file_{i}",
+                    "doc_type": "full_text",
+                    "user_id": user_id,
+                }
+            })
+
+    if not documents:
+        return {"indexed": 0, "error": "No valid documents to index"}
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{SERVICE_URLS['rag']}/index",
+                json={
+                    "articles": documents,
+                    "tenant_id": f"user_{user_id}",
+                    "async_ingest": False,
+                },
+                timeout=60.0
+            )
+            resp.raise_for_status()
+            result = resp.json()
+            logger.info(f"Indexed {result.get('indexed', 0)} user documents for user={user_id} case={case_id}")
+            return result
+    except Exception as e:
+        logger.error(f"Failed to index user documents: {e}")
+        return {"indexed": 0, "error": str(e)}
+
+
 async def run_pipeline(case_id: str, files: List[UploadFile], user_id: str = "default") -> dict:
     """Execute full 6-stage pipeline with graceful degradation"""
     import logging
@@ -693,6 +854,17 @@ async def run_pipeline(case_id: str, files: List[UploadFile], user_id: str = "de
         combined_text = " ".join([r.get("full_text", "") or r.get("normalized_text", "") for r in ocr_results]).strip()
         all_entities = merge_entities([r.get("entities", {}) for r in ocr_results])
         avg_confidence = sum([r.get("avg_confidence", 0) for r in ocr_results]) / max(len(ocr_results), 1)
+
+        # ── Stage 1b: Index User Documents for RAG ───────────────────
+        if combined_text and user_id:
+            try:
+                index_result = await index_user_documents(ocr_results, user_id, case_id)
+                if index_result.get("indexed", 0) > 0:
+                    stages_completed.append("index_user_docs")
+                    logger.info(f"Indexed {index_result.get('indexed')} user documents into RAG")
+            except Exception as e:
+                logger.warning(f"User document indexing failed (non-critical): {e}")
+                errors.append({"stage": "index_user_docs", "error": str(e)})
 
         ocr_metadata = {
             "avg_confidence": round(avg_confidence, 3),

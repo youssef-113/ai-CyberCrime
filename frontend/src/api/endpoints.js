@@ -65,6 +65,21 @@ export const sendChatMessage = async (sessionId, message, caseContext) => {
   return response.data
 }
 
+export const uploadChatDocuments = async (files, sessionId) => {
+  const formData = new FormData()
+  files.forEach(file => formData.append('files', file))
+  if (sessionId) {
+    formData.append('session_id', sessionId)
+  }
+
+  const response = await client.post('/chat/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return response.data
+}
+
 export const resetChat = async (sessionId) => {
   const response = await client.post('/chat/reset', { session_id: sessionId })
   return response.data

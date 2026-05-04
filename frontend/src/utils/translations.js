@@ -121,10 +121,15 @@ export const translations = {
       title: 'Legal Chatbot',
       subtitle: 'Egyptian Cybercrime Law Advisor',
       clear: 'Clear',
-      welcome: 'Welcome to the Cybercrime AI Legal Chatbot. I can answer questions about Egyptian cybercrime law (Law 175/2018) and help you understand your case. What would you like to know?',
+      welcome: 'Welcome to the Cybercrime AI Legal Chatbot. I can answer questions about Egyptian cybercrime law (Law 175/2018) and help you understand your case. Upload documents and ask me anything about them!',
       thinking: 'Thinking...',
       placeholder: 'Ask about Egyptian cybercrime law...',
       send: 'Send',
+      uploadDocs: 'Upload documents for RAG',
+      uploadDesc: 'Click to select files or drag & drop',
+      uploadFormats: 'PDF, Images (max 10MB each)',
+      addMore: 'Add More',
+      uploadFiles: 'Upload file(s)',
     },
 
     // Settings
@@ -347,10 +352,15 @@ export const translations = {
       title: 'المحادثة القانونية',
       subtitle: 'مستشار قانون الجرائم الإلكترونية المصرية',
       clear: 'مسح',
-      welcome: 'مرحباً بك في المحادثة القانونية للذكاء الاصطناعي للجرائم الإلكترونية. يمكنني الإجابة على أسئلة حول قانون الجرائم الإلكترونية المصري (قانون 175/2018) ومساعدتك في فهم قضيتك. ماذا تريد أن تعرف؟',
+      welcome: 'مرحباً بك في المحادثة القانونية للذكاء الاصطناعي للجرائم الإلكترونية. يمكنني الإجابة على أسئلة حول قانون الجرائم الإلكترونية المصري (قانون 175/2018) ومساعدتك في فهم قضيتك. ارفع المستندات واسألني عنها!',
       thinking: 'جاري التفكير...',
       placeholder: 'اسأل عن قانون الجرائم الإلكترونية المصرية...',
       send: 'إرسال',
+      uploadDocs: 'رفع المستندات للدردشة',
+      uploadDesc: 'انقر لاختيار الملفات أو اسحب وأفلت',
+      uploadFormats: 'PDF, صور (بحد أقصى 10 ميجابايت لكل ملف)',
+      addMore: 'إضافة المزيد',
+      uploadFiles: 'رفع الملفات',
     },
 
     // Settings

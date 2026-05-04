@@ -144,6 +144,17 @@ def build_system_prompt(case_context: Optional[dict]) -> str:
     else:
         articles_text = "لم يتم استرجاع مواد قانونية لهذه القضية بعد."
 
+    # Build user documents from RAG
+    user_docs = case_context.get("user_documents", [])
+    user_docs_text = ""
+    if user_docs:
+        user_docs_text = "\n".join([
+            f"• {doc.get('source', 'ملف')} (صلة: {int(doc.get('relevance_score', 0) * 100)}%): {doc.get('text', '')[:150]}..."
+            for doc in user_docs[:5]
+        ])
+    else:
+        user_docs_text = "لا توجد وثائق مرفوعة من المستخدم."
+
     # Build entities summary for context
     entities = case_context.get("entities", {})
     phones = entities.get("phones", [])
@@ -166,6 +177,9 @@ def build_system_prompt(case_context: Optional[dict]) -> str:
 
 ══ المواد القانونية التي يُجيز لك الاستشهاد بها فقط ══
 {articles_text}
+
+══ وثائق المستخدم المرفوعة (استخدمها للإجابة على الأسئلة) ══
+{user_docs_text}
 
 ══ القواعد الصارمة التي يجب الالتزام بها ══
 ١. أجب دائماً بالعربية الفصحى — حتى لو كان السؤال بالعامية المصرية.
@@ -225,6 +239,17 @@ Be supportive and empathetic. Refer users to the Cybercrime Investigation hotlin
     else:
         articles_text = "No legal articles have been retrieved for this case yet."
 
+    # Build user documents from RAG
+    user_docs = case_context.get("user_documents", [])
+    user_docs_text = ""
+    if user_docs:
+        user_docs_text = "\n".join([
+            f"• {doc.get('source', 'file')} (relevance: {int(doc.get('relevance_score', 0) * 100)}%): {doc.get('text', '')[:150]}..."
+            for doc in user_docs[:5]
+        ])
+    else:
+        user_docs_text = "No user uploaded documents."
+
     # Build entities summary for context
     entities = case_context.get("entities", {})
     phones = entities.get("phones", [])
@@ -242,11 +267,14 @@ Number of Evidence Files: {len(case_context.get("evidence_blocks", []))}
 Verified Claims:
 {claims_text}
 
-{'Tracked Phone Numbers: ' + ', '.join(phones) if phones else ''}
-{'Tracked Financial Amounts: ' + ', '.join(amounts) if amounts else ''}
+{'Phone numbers detected: ' + ', '.join(phones) if phones else ''}
+{'Financial amounts detected: ' + ', '.join(amounts) if amounts else ''}
 
-══ Legal Articles You Are Permitted to Cite Only ══
+══ Legal Articles You May Cite ══
 {articles_text}
+
+══ User Uploaded Documents (use to answer questions) ══
+{user_docs_text}
 
 ══ Strict Rules You Must Follow ══
 1. Always answer in formal English — even if the question is in informal language.

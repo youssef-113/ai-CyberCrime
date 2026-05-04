@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
-import { Send, Trash2, Bot, User, Scale } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Send, Trash2, Bot, User, Scale, Upload, FileText, X, Paperclip } from 'lucide-react'
 import { Card, CardBody } from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
@@ -8,17 +8,23 @@ import { useChat } from '../api/hooks'
 import { useCase } from '../context/CaseContext'
 import { useTheme } from '../context/ThemeContext'
 import { getTranslation } from '../utils/translations'
+import { uploadChatDocuments } from '../api/endpoints'
+import { toastSuccess, toastError } from '../components/ui/Alert'
 import clsx from 'clsx'
 
 export default function ChatbotPage() {
   const { analysisResult } = useCase()
   const caseContext = analysisResult || {}
-  const { messages, sendMessage, loading, error, clearChat } = useChat(caseContext)
+  const { messages, sendMessage, loading, error, clearChat, sessionId } = useChat(caseContext)
   const [input, setInput] = useState('')
+  const [uploadedFiles, setUploadedFiles] = useState([])
+  const [uploading, setUploading] = useState(false)
+  const [showUpload, setShowUpload] = useState(false)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+  const fileInputRef = useRef(null)
   const { language, isRtl } = useTheme()
-  
+
   const t = (key) => getTranslation(language, key)
 
   const WELCOME_MESSAGE = {
@@ -41,6 +47,34 @@ export default function ChatbotPage() {
     await sendMessage(trimmed)
     inputRef.current?.focus()
   }
+
+  const handleFileSelect = useCallback((e) => {
+    const files = Array.from(e.target.files)
+    if (files.length > 0) {
+      setUploadedFiles(prev => [...prev, ...files])
+    }
+  }, [])
+
+  const removeFile = useCallback((index) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index))
+  }, [])
+
+  const handleUpload = useCallback(async () => {
+    if (uploadedFiles.length === 0) return
+
+    setUploading(true)
+    try {
+      const result = await uploadChatDocuments(uploadedFiles, sessionId)
+      toastSuccess(result.message || `Uploaded ${result.indexed} document chunks`)
+      setUploadedFiles([])
+      setShowUpload(false)
+    } catch (err) {
+      toastError('Failed to upload documents')
+      console.error(err)
+    } finally {
+      setUploading(false)
+    }
+  }, [uploadedFiles, sessionId])
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -114,8 +148,82 @@ export default function ChatbotPage() {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* File Upload Panel */}
+        {showUpload && (
+          <div className="p-4 border-t border-neutral-800 bg-neutral-900/50">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-neutral-300">{t('chatbot.uploadDocs')}</h3>
+              <button onClick={() => setShowUpload(false)} className="text-neutral-400 hover:text-neutral-200">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {uploadedFiles.length === 0 ? (
+              <div
+                className="border-2 border-dashed border-neutral-700 rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="w-8 h-8 mx-auto mb-2 text-neutral-400" />
+                <p className="text-sm text-neutral-400">{t('chatbot.uploadDesc')}</p>
+                <p className="text-xs text-neutral-500 mt-1">{t('chatbot.uploadFormats')}</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {uploadedFiles.map((file, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-neutral-800/50 rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-primary" />
+                      <span className="text-sm text-neutral-300 truncate max-w-[200px]">{file.name}</span>
+                      <span className="text-xs text-neutral-500">({(file.size / 1024).toFixed(1)} KB)</span>
+                    </div>
+                    <button onClick={() => removeFile(idx)} className="text-neutral-400 hover:text-danger-light">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-1"
+                  >
+                    {t('chatbot.addMore')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleUpload}
+                    loading={uploading}
+                    className="flex-1"
+                  >
+                    {t('chatbot.uploadFiles')}
+                  </Button>
+                </div>
+              </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.png,.jpg,.jpeg"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+          </div>
+        )}
+
         <form onSubmit={handleSend} className="p-4 border-t border-neutral-800">
           <div className="flex gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0 w-11 h-11"
+              onClick={() => setShowUpload(!showUpload)}
+              title="Upload documents for chat"
+            >
+              <Paperclip className={clsx("w-5 h-5", showUpload && "text-primary")} />
+            </Button>
             <Input
               ref={inputRef}
               value={input}

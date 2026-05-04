@@ -65,7 +65,7 @@ export function useChat(caseContext) {
     sessionIdRef.current = `session_${Date.now()}`
   }, [])
 
-  return { messages, sendMessage, loading, error, clearChat }
+  return { messages, sendMessage, loading, error, clearChat, sessionId: sessionIdRef.current }
 }
 
 export function usePdfDownload() {
