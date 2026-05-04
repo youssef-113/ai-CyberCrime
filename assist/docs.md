@@ -715,3 +715,54 @@ Frontend ──▶ API Service (port 8000) ──▶ Verification Service (port 
            │ • messages  │   └─────────────┘   └─────────────┘
            │ • cases     │
            └─────────────┘
+           ┌─────────────┐     ┌─────────────────┐     ┌─────────────┐
+│   OCR       │────▶│   Classifier    │────▶│   RAG       │
+│  (output)   │     │   (/classify)   │     │  (articles) │
+└─────────────┘     └────────┬────────┘     └─────────────┘
+                             │
+                    ┌────────┴────────┐
+                    │  1. Normalize   │
+                    │     Arabic text │
+                    │                 │
+                    │  2. Build LLM   │
+                    │     prompt with │
+                    │     crime defs  │
+                    │                 │
+                    │  3. Call Claude  │
+                    │     API         │
+                    │                 │
+                    │  4. Parse JSON  │
+                    │     response    │
+                    │                 │
+                    │  5. Validate    │
+                    │     entities    │
+                    │                 │
+                    │  6. Map articles│
+                    │     by crime    │
+                    │     type        │
+                    │                 │
+                    │  7. Record      │
+                    │     metrics     │
+                    └─────────────────┘
+
+
+                    Classifier Service                    RAG Service
+     │                                     │
+     │  crime_type, articles               │
+     │────────────────────────────────────▶│
+     │                                     │
+     │  POST /retrieve                     │
+     │  {                                  │
+     │    "query": "...",                  │
+     │    "crime_type": "blackmail"         │
+     │  }                                  │
+     │                                     │
+     │◀─────────────────────────────────────│
+     │  {                                  │
+     │    "articles": [...],               │
+     │    "citation_validation_status": {  │  ◄── NEW
+     │      "valid": [...],                │
+     │      "status": "PASSED"              │
+     │    }                                 │
+     │  }                                   │
+     │                                      │

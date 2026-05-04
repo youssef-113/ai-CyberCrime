@@ -52,12 +52,20 @@ class LawArticle(BaseModel):
     parent_text: Optional[str] = None
 
 
+class CitationValidationResult(BaseModel):
+    valid: List[Dict[str, Any]] = []
+    invalid: List[Dict[str, Any]] = []
+    status: str = "PASSED"  # PASSED | FAILED
+    validation_details: Dict[str, Any] = {}
+
+
 class RetrieveResponse(BaseModel):
     articles: List[LawArticle]
     cache_hit: bool = False
     cache_source: Optional[str] = None
     query_strategy: str = "none"
     latency_ms: float = 0.0
+    citation_validation_status: Optional[CitationValidationResult] = None
 
 
 class IndexRequest(BaseModel):
@@ -150,18 +158,31 @@ async def retrieve(request: RetrieveRequest):
     start_time = time.time()
     enhanced_query = f"{request.crime_type}: {request.query}" if request.crime_type else request.query
 
+    # Import citation validation
+    from citations import validate_citations
+
     try:
         from cache import lookup
         cached = lookup(enhanced_query, request.tenant_id)
 
         if cached:
             latency = (time.time() - start_time) * 1000
+            articles_data = cached.response.get("articles", [])
+
+            # Validate citations for cached response
+            citation_validation = validate_citations(
+                articles_data,
+                request.crime_type,
+                request.tenant_id
+            )
+
             return RetrieveResponse(
-                articles=[LawArticle(**a) for a in cached.response.get("articles", [])],
+                articles=[LawArticle(**a) for a in articles_data],
                 cache_hit=True,
                 cache_source=cached.source,
                 query_strategy="cache",
                 latency_ms=round(latency, 2),
+                citation_validation_status=CitationValidationResult(**citation_validation),
             )
 
     except Exception as e:
@@ -267,12 +288,21 @@ async def retrieve(request: RetrieveRequest):
     except Exception as e:
         logger.warning(f"Cache store failed: {e}")
 
+    # Validate citations before returning
+    articles_dicts = [a.dict() for a in articles]
+    citation_validation = validate_citations(
+        articles_dicts,
+        request.crime_type,
+        request.tenant_id
+    )
+
     return RetrieveResponse(
         articles=articles,
         cache_hit=False,
         cache_source=None,
         query_strategy=strategy_used,
         latency_ms=round(latency, 2),
+        citation_validation_status=CitationValidationResult(**citation_validation),
     )
 
 
@@ -400,12 +430,11 @@ def list_tenants():
         }
 
 
-@app.delete("/tenants/{tenant_id}")
-def delete_tenant(tenant_id: str):
-    """Delete a tenant ChromaDB collection."""
-
+@app.delete("/collections/{tenant_id}")
+async def delete_collection(tenant_id: str):
+    """Delete a tenant's collection (admin only)."""
     if not config.multi_tenant.enabled:
-        raise HTTPException(status_code=400, detail="Multi-tenant mode is disabled")
+        raise HTTPException(status_code=400, detail="Multi-tenant mode not enabled")
 
     collection_name = f"{config.multi_tenant.namespace_prefix}{tenant_id}"
 
@@ -422,6 +451,26 @@ def delete_tenant(tenant_id: str):
 
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+class ValidateCitationsRequest(BaseModel):
+    articles: List[Dict[str, Any]]
+    crime_type: str = ""
+    tenant_id: str = "default"
+
+
+@app.post("/validate-citations", response_model=CitationValidationResult)
+async def validate_citations_endpoint(request: ValidateCitationsRequest):
+    """Validate that cited articles exist in ChromaDB with matching crime_type."""
+    from citations import validate_citations
+
+    result = validate_citations(
+        request.articles,
+        request.crime_type,
+        request.tenant_id
+    )
+
+    return CitationValidationResult(**result)
 
 
 @app.on_event("startup")
