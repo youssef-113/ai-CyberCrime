@@ -1,9 +1,9 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, Search, LayoutDashboard, MessageSquare, Settings, FileText, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
+import { Home, Search, LayoutDashboard, MessageSquare, Settings, FileText, Shield, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
 import { getTranslation } from '../../utils/translations'
-import toast from 'react-hot-toast'
+import { toastSuccess } from '../../components/ui/Alert'
 import clsx from 'clsx'
 
 const navItems = [

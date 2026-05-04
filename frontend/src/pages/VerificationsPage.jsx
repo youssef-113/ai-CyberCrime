@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { MainLayout } from '../components/layout/MainLayout'
-import { Card } from '../components/ui/Card'
-import { Alert } from '../components/ui/Alert'
+import MainLayout from '../components/layout/MainLayout'
+import { Card, CardBody } from '../components/ui/Card'
 import {
   VerificationsList,
   VerificationResults,
@@ -58,9 +57,14 @@ export default function VerificationsPage() {
         </div>
 
         {error && (
-          <Alert variant="error" className="mb-6" onClose={() => setError(null)}>
-            {error}
-          </Alert>
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-red-700">{error}</p>
+              <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
+                ×
+              </button>
+            </div>
+          </div>
         )}
 
         <div className="grid gap-6 lg:grid-cols-3">

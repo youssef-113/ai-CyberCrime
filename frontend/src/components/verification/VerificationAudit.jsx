@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Card } from '../ui/Card'
-import { Badge } from '../ui/Badge'
-import { Button } from '../ui/Button'
-import { Modal } from '../ui/Modal'
+import { Card, CardBody } from '../ui/Card'
+import Badge from '../ui/Badge'
+import Button from '../ui/Button'
+import Modal from '../ui/Modal'
 import { getVerificationAudit } from '../../api/endpoints'
 
 /**

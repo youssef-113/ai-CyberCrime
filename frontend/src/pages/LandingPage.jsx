@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { getTranslation } from '../utils/translations'
 import { useNavigate } from 'react-router-dom'
-import toast from 'react-hot-toast'
+import { toastSuccess } from '../components/ui/Alert'
 
 const features = [
   {

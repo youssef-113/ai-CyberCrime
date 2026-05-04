@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { getTranslation } from '../utils/translations'
 import { validatePasswordStrength } from '../utils/validators'
-import toast from 'react-hot-toast'
+import { toastSuccess, toastError } from '../components/ui/Alert'
 
 const PASSWORD_RULES = [
   { key: 'length', label: 'At least 8 characters', test: (p) => p.length >= 8 },
@@ -60,7 +60,7 @@ export default function SignupPage() {
 
     try {
       await register(email, password, fullName || null)
-      toast.success(t('auth.registerSuccess'))
+      toastSuccess(t('auth.registerSuccess'))
       navigate('/dashboard')
     } catch (err) {
       // Error is set in AuthContext

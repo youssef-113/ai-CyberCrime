@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Card } from '../ui/Card'
-import { Badge } from '../ui/Badge'
-import { Button } from '../ui/Button'
+import { Card, CardBody } from '../ui/Card'
+import Badge from '../ui/Badge'
+import Button from '../ui/Button'
 import { getVerifications } from '../../api/endpoints'
 
 /**

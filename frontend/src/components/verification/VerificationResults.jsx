@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Card } from '../ui/Card'
-import { Badge } from '../ui/Badge'
-import { Button } from '../ui/Button'
-import { Tabs } from '../ui/Tabs'
+import { Card, CardBody } from '../ui/Card'
+import Badge from '../ui/Badge'
+import Button from '../ui/Button'
+import { useTheme } from '../../context/ThemeContext'
 
 /**
  * VerificationResults - Displays verification outcome with score, grade, and timeline
- * 
+ *
  * @param {Object} result - Verification result from API
  * @param {string} result.case_id
  * @param {string} result.status - APPROVED, NEEDS_REVISION, NEEDS_USER_REVIEW
@@ -17,6 +17,7 @@ import { Tabs } from '../ui/Tabs'
  * @param {Object} result.timeline
  */
 export function VerificationResults({ result, onViewAudit, className = '' }) {
+  const { language } = useTheme()
   const [activeTab, setActiveTab] = useState('overview')
 
   if (!result) {
@@ -64,7 +65,12 @@ export function VerificationResults({ result, onViewAudit, className = '' }) {
     }
   }
 
-  const scorePercentage = Math.min(100, Math.max(0, final_score))
+  const tabs = [
+    { id: 'overview', label: language === 'ar' ? 'نظرة عامة' : 'Overview' },
+    { id: 'rounds', label: `${language === 'ar' ? 'الجولات' : 'Rounds'} (${rounds})` },
+    { id: 'timeline', label: language === 'ar' ? 'الجدول الزمني' : 'Timeline' },
+    { id: 'breakdown', label: language === 'ar' ? 'تفاصيل النتيجة' : 'Score Breakdown' },
+  ]
 
   return (
     <Card className={`overflow-hidden ${className}`}>
@@ -111,39 +117,40 @@ export function VerificationResults({ result, onViewAudit, className = '' }) {
         </div>
       </div>
 
-      {/* Tabs Content */}
-      <Tabs value={activeTab} onChange={setActiveTab} className="px-6 py-4">
-        <Tabs.Tab value="overview" label="Overview" />
-        <Tabs.Tab value="rounds" label={`Rounds (${rounds})`} />
-        <Tabs.Tab value="timeline" label="Timeline" />
-        <Tabs.Tab value="breakdown" label="Score Breakdown" />
+      {/* Custom Tabs */}
+      <div className="px-6 py-4">
+        <div className="flex border-b border-gray-200 mb-4">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? 'border-b-2 border-blue-600 text-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-        <Tabs.Panel value="overview">
-          <OverviewPanel
-            status={status}
-            grade={grade}
-            rounds={rounds}
-            timeline={timeline}
-          />
-        </Tabs.Panel>
-
-        <Tabs.Panel value="rounds">
-          <RoundsPanel rounds={round_details} />
-        </Tabs.Panel>
-
-        <Tabs.Panel value="timeline">
-          <TimelinePanel timeline={timeline} />
-        </Tabs.Panel>
-
-        <Tabs.Panel value="breakdown">
-          <ScoreBreakdownPanel breakdown={score_breakdown} />
-        </Tabs.Panel>
-      </Tabs>
+        <div className="py-2">
+          {activeTab === 'overview' && (
+            <OverviewPanel status={status} grade={grade} rounds={rounds} timeline={timeline} />
+          )}
+          {activeTab === 'rounds' && <RoundsPanel rounds={round_details} />}
+          {activeTab === 'timeline' && <TimelinePanel timeline={timeline} />}
+          {activeTab === 'breakdown' && <ScoreBreakdownPanel breakdown={score_breakdown} />}
+        </div>
+      </div>
     </Card>
   )
 }
 
 function OverviewPanel({ status, grade, rounds, timeline }) {
+  const { language } = useTheme()
+  const t = (key) => getTranslation(language, key)
   const statusMessages = {
     APPROVED: 'Evidence has been verified and approved. The claims are well-supported by the evidence and legal articles.',
     NEEDS_REVISION: 'Some claims need revision. Review the attacker challenges and judge feedback to strengthen the evidence.',
