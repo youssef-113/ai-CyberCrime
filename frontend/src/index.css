@@ -410,3 +410,139 @@
     transform: translateX(0) scale(1);
   }
 }
+
+/* New smooth animations for Swal2 show/hide */
+.swal2-animate-show {
+  animation: cyberAlertIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.swal2-animate-hide {
+  animation: cyberAlertOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+}
+
+.swal2-toast-animate-show {
+  animation: cyberToastIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.swal2-toast-animate-hide {
+  animation: cyberToastOut 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+}
+
+.swal2-backdrop-show {
+  animation: cyberBackdropIn 0.3s ease-out !important;
+}
+
+.swal2-backdrop-hide {
+  animation: cyberBackdropOut 0.25s ease-in forwards !important;
+}
+
+/* Cyber Toast Popup Styling */
+.cyber-toast-popup {
+  background: rgba(10, 10, 10, 0.98) !important;
+  border: 1px solid #262626 !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 189, 125, 0.1) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+
+.cyber-toast-popup.swal2-success {
+  border-color: rgba(0, 189, 125, 0.4) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 189, 125, 0.15) !important;
+}
+
+.cyber-toast-popup.swal2-error {
+  border-color: rgba(220, 38, 38, 0.4) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(220, 38, 38, 0.15) !important;
+}
+
+.cyber-toast-popup.swal2-warning {
+  border-color: rgba(217, 119, 6, 0.4) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(217, 119, 6, 0.15) !important;
+}
+
+.cyber-toast-title {
+  font-size: 0.95rem !important;
+  font-weight: 500 !important;
+  color: #FAFAFA !important;
+  letter-spacing: 0.01em !important;
+}
+
+.cyber-toast-icon {
+  transform: scale(0.85) !important;
+}
+
+.cyber-toast-progress {
+  background: rgba(0, 189, 125, 0.5) !important;
+  height: 3px !important;
+  border-radius: 0 0 0.75rem 0.75rem !important;
+}
+
+.cyber-toast-popup.swal2-error .cyber-toast-progress {
+  background: rgba(220, 38, 38, 0.5) !important;
+}
+
+.cyber-toast-popup.swal2-warning .cyber-toast-progress {
+  background: rgba(217, 119, 6, 0.5) !important;
+}
+
+/* Animation Keyframes */
+@keyframes cyberAlertOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.9) translateY(-10px);
+    filter: blur(4px);
+  }
+}
+
+@keyframes cyberToastOut {
+  0% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(100%) scale(0.9);
+  }
+}
+
+@keyframes cyberBackdropIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes cyberBackdropOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Toast close button styling */
+.swal2-toast .swal2-close {
+  color: #737373 !important;
+  font-size: 1.2rem !important;
+  transition: all 0.2s ease !important;
+  margin-top: -2px !important;
+}
+
+.swal2-toast .swal2-close:hover {
+  color: #FAFAFA !important;
+  transform: scale(1.1) !important;
+}
+
+/* Improved backdrop with blur effect */
+.swal2-backdrop-show {
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}

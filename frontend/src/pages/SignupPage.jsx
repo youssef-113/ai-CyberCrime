@@ -61,7 +61,7 @@ export default function SignupPage() {
     try {
       await register(email, password, fullName || null)
       toastSuccess(t('auth.registerSuccess'))
-      navigate('/dashboard')
+      setTimeout(() => navigate('/dashboard'), 1500)
     } catch (err) {
       // Error is set in AuthContext
     }
