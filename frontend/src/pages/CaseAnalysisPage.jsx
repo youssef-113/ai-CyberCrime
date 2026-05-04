@@ -88,12 +88,12 @@ export default function CaseAnalysisPage() {
 
     try {
       const stepTimer = setInterval(() => {
-        setPipelineStep((prev) => (prev < PIPELINE_STEPS.length - 1 ? prev + 1 : prev))
+        setPipelineStep((prev) => (prev < pipelineSteps.length - 1 ? prev + 1 : prev))
       }, 4000)
 
       const data = await analyze(files, true)
       clearInterval(stepTimer)
-      setPipelineStep(PIPELINE_STEPS.length - 1)
+      setPipelineStep(pipelineSteps.length - 1)
       setResult(data)
       toastSuccess('Analysis complete!')
     } catch (err) {
