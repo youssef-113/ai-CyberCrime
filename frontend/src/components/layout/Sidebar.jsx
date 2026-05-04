@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, Search, LayoutDashboard, MessageSquare, Settings, FileText, Shield, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
+import { Home, Search, LayoutDashboard, MessageSquare, Settings, FileText, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
 import { getTranslation } from '../../utils/translations'
@@ -11,7 +11,6 @@ const navItems = [
   { path: '/dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard' },
   { path: '/analyze', icon: Search, labelKey: 'nav.newCase' },
   { path: '/history', icon: FileText, labelKey: 'nav.caseHistory' },
-  { path: '/verifications', icon: Shield, labelKey: 'nav.verifications' },
   { path: '/chatbot', icon: MessageSquare, labelKey: 'nav.legalChat' },
   { path: '/settings', icon: Settings, labelKey: 'nav.settings' },
 ]
