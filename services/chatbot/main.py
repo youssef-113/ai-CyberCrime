@@ -27,6 +27,7 @@ class ChatRequest(BaseModel):
     user_message: str
     case_context: Optional[dict] = None
     language: str = "ar"  # "ar" for Arabic, "en" for English
+    history: Optional[List[dict]] = None  # Recent conversation history for context
 
 
 class ChatResponse(BaseModel):
@@ -562,6 +563,7 @@ def chat(
     user_message: str,
     case_context: Optional[dict] = None,
     language: str = "ar",
+    external_history: Optional[List[dict]] = None,
 ) -> tuple[str, List[str]]:
     """
     Main chat function.
@@ -572,6 +574,7 @@ def chat(
         user_message: User's question
         case_context: Optional case data for context
         language: "ar" for Arabic, "en" for English
+        external_history: Optional history from database (last N messages)
     """
     session = get_session(session_id)
 
@@ -586,8 +589,11 @@ def chat(
         system = build_system_prompt(ctx)
         rule_based_fn = rule_based_reply
 
-    # Get conversation history
     history = session["history"]
+    if external_history and len(history) == 0:
+        for turn in external_history:
+            history.append({"role": "user", "content": turn.get("user", "")})
+            history.append({"role": "assistant", "content": turn.get("assistant", "")})
 
     logger.info(
         f"[{session_id}] message #{session.get('message_count',0)+1} "
@@ -673,6 +679,7 @@ async def chat_endpoint(request: ChatRequest):
         user_message=request.user_message,
         case_context=request.case_context,
         language=request.language,
+        external_history=request.history,
     )
     elapsed = round(time.time() - t0, 2)
     logger.info(f"Chat completed in {elapsed}s")

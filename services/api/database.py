@@ -331,6 +331,35 @@ async def get_chat_history(session_id: str) -> List[dict]:
     return result.data
 
 
+async def get_recent_chat_history(session_id: str, limit: int = 5) -> List[dict]:
+    """Get the last N messages for a chat session (for context)."""
+    db = get_supabase()
+    result = db.table("chat_messages").select("*").eq("session_id", session_id).order("created_at", desc=True).limit(limit).execute()
+    # Reverse to get chronological order
+    return list(reversed(result.data))
+
+
+async def save_session_upload(session_id: str, file_name: str, file_type: str, indexed_chunks: int = 0, metadata: Optional[dict] = None) -> dict:
+    """Save a record of a file uploaded to a chat session."""
+    db = get_supabase()
+    data = {
+        "session_id": session_id,
+        "file_name": file_name,
+        "file_type": file_type,
+        "indexed_chunks": indexed_chunks,
+        "metadata": json.dumps(metadata) if metadata else None,
+    }
+    result = db.table("session_uploads").insert(data).execute()
+    return result.data[0] if result.data else None
+
+
+async def get_session_uploads(session_id: str) -> List[dict]:
+    """Get all files uploaded to a chat session."""
+    db = get_supabase()
+    result = db.table("session_uploads").select("*").eq("session_id", session_id).order("created_at", desc=True).execute()
+    return result.data
+
+
 # ── Internal Helpers ─────────────────────────────────────────────────────────
 def _store_refresh_token(db: Client, user_id: str, token: str) -> None:
     """Store a refresh token's JTI in the database."""

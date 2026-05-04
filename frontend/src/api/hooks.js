@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import * as endpoints from './endpoints'
 
 export function useAnalyze() {
@@ -26,11 +26,41 @@ export function useAnalyze() {
   return { analyze, loading, progress, error }
 }
 
-export function useChat(caseContext) {
+export function useChat(caseContext, initialSessionId = null) {
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const sessionIdRef = useRef(`session_${Date.now()}`)
+  const [sessionLoading, setSessionLoading] = useState(false)
+  const sessionIdRef = useRef(initialSessionId || `session_${Date.now()}`)
+
+  // Load chat history when initialSessionId changes
+  useEffect(() => {
+    if (initialSessionId) {
+      sessionIdRef.current = initialSessionId
+      loadHistory(initialSessionId)
+    }
+  }, [initialSessionId])
+
+  const loadHistory = useCallback(async (sessionId) => {
+    setSessionLoading(true)
+    try {
+      const data = await endpoints.getChatHistory(sessionId)
+      if (data.messages && data.messages.length > 0) {
+        // Convert to frontend format
+        const loadedMessages = data.messages.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.created_at || new Date().toISOString(),
+          citations: msg.citations ? JSON.parse(msg.citations) : undefined,
+        }))
+        setMessages(loadedMessages)
+      }
+    } catch (err) {
+      console.error('Failed to load chat history:', err)
+    } finally {
+      setSessionLoading(false)
+    }
+  }, [])
 
   const sendMessage = useCallback(async (content) => {
     setLoading(true)
@@ -48,6 +78,7 @@ export function useChat(caseContext) {
         role: 'assistant',
         content: response.reply || response.content || response,
         timestamp: new Date().toISOString(),
+        citations: response.citations,
       }
       setMessages((prev) => [...prev, aiMessage])
       return aiMessage
@@ -65,7 +96,7 @@ export function useChat(caseContext) {
     sessionIdRef.current = `session_${Date.now()}`
   }, [])
 
-  return { messages, sendMessage, loading, error, clearChat, sessionId: sessionIdRef.current }
+  return { messages, sendMessage, loading, error, clearChat, sessionId: sessionIdRef.current, sessionLoading, loadHistory }
 }
 
 export function usePdfDownload() {

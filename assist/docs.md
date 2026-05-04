@@ -698,3 +698,20 @@ Frontend ──▶ API Service (port 8000) ──▶ Verification Service (port 
 │                                                              │
 │  [Start New Case]  [Download PDF]                           │
 └─────────────────────────────────────────────────────────────┘
+
+┌─────────────────┐         ┌──────────────────┐
+│   Frontend      │────────▶│  API Gateway     │
+└─────────────────┘         │  (main.py)       │
+                            └────────┬─────────┘
+                                     │
+                    ┌──────────────────┼──────────────────┐
+                    ▼                  ▼                  ▼
+           ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+           │  Supabase   │   │  RAG Svc    │   │  ChromaDB   │
+           │  (PostgreSQL)│   │  (main.py)  │   │  (Vectors)  │
+           │             │   │             │   │             │
+           │ • users     │   │ • retrieve  │──▶│ • embeddings│
+           │ • sessions  │   │ • index     │◄──│ • chunks    │
+           │ • messages  │   └─────────────┘   └─────────────┘
+           │ • cases     │
+           └─────────────┘

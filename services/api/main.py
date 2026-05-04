@@ -18,6 +18,7 @@ from database import (
     get_user_by_id, change_user_password, get_supabase,
     create_case, update_case, get_user_cases, get_case_by_id,
     create_chat_session, get_user_sessions, save_chat_message, get_chat_history,
+    get_recent_chat_history, save_session_upload, get_session_uploads,
 )
 from middleware import get_current_user, get_current_user_id
 
@@ -427,6 +428,18 @@ async def chat(
     # Save user message
     await save_chat_message(session_id, "user", user_message)
 
+    # ── Retrieve Recent Chat History (last 5 messages for context) ─────────────────
+    recent_history = await get_recent_chat_history(session_id, limit=5)
+    history_pairs = []
+    for i in range(0, len(recent_history) - 1, 2):
+        user_msg = recent_history[i] if recent_history[i].get("role") == "user" else None
+        assistant_msg = recent_history[i + 1] if recent_history[i + 1].get("role") == "assistant" else None
+        if user_msg and assistant_msg:
+            history_pairs.append({
+                "user": user_msg.get("content", ""),
+                "assistant": assistant_msg.get("content", ""),
+            })
+
     # ── Retrieve from User's Personal RAG Collection ─────────────────
     user_documents = []
     try:
@@ -449,6 +462,14 @@ async def chat(
     except Exception as e:
         logger.warning(f"User RAG retrieval failed (non-critical): {e}")
 
+    # ── Get Session Uploads for additional context ─────────────────
+    try:
+        session_uploads = await get_session_uploads(session_id)
+        logger.info(f"Retrieved {len(session_uploads)} session uploads for chat")
+    except Exception as e:
+        logger.warning(f"Failed to get session uploads (non-critical): {e}")
+        session_uploads = []
+
     # Merge user documents into case_context for chatbot
     enhanced_context = case_context or {}
     if user_documents:
@@ -463,7 +484,18 @@ async def chat(
             for doc in user_documents
         ])
 
-    # Forward to chatbot service
+    # Add session uploads to context
+    if session_uploads:
+        enhanced_context["session_uploads"] = [
+            {
+                "file_name": u.get("file_name", ""),
+                "file_type": u.get("file_type", ""),
+                "indexed_chunks": u.get("indexed_chunks", 0),
+            }
+            for u in session_uploads
+        ]
+
+    # Forward to chatbot service with history
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(
@@ -472,6 +504,7 @@ async def chat(
                     "session_id": session_id,
                     "user_message": user_message,
                     "case_context": enhanced_context,
+                    "history": history_pairs,
                 },
                 timeout=60.0,
             )
@@ -533,6 +566,21 @@ async def chat_upload_documents(
             session_id or f"chat_upload_{uuid.uuid4().hex[:8]}"
         )
         indexed_count = index_result.get("indexed", 0)
+
+    # Save upload records to session (if session_id provided)
+    if session_id:
+        for i, file in enumerate(files):
+            ocr_data = ocr_results[i] if i < len(ocr_results) else {}
+            await save_session_upload(
+                session_id=session_id,
+                file_name=file.filename,
+                file_type=file.content_type or "application/octet-stream",
+                indexed_chunks=indexed_count,
+                metadata={
+                    "ocr_text_length": len(ocr_data.get("text", "")) if isinstance(ocr_data, dict) else 0,
+                    "ocr_entities_count": len(ocr_data.get("entities", [])) if isinstance(ocr_data, dict) else 0,
+                }
+            )
 
     return {
         "indexed": indexed_count,
