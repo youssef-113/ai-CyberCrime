@@ -17,10 +17,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Import modular components
-from models import OCRResponse, EntityCollection, EvidenceBlock
-from ocr_engine import get_ocr_engine, OCREngine, OCRConfig
-from arabic_utils import normalize_arabic_text, detect_language
-from entities import extract_entities, merge_entities, check_threat_indicators
+from .models import OCRResponse, EntityCollection, EvidenceBlock
+from .ocr_engine import get_ocr_engine, OCREngine, OCRConfig
+from .arabic_utils import normalize_arabic_text, detect_language
+from .entities import extract_entities, merge_entities, check_threat_indicators
 
 # Initialize FastAPI app
 app = FastAPI(

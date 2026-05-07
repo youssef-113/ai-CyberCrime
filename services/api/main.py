@@ -9,18 +9,18 @@ import uuid
 import os
 from datetime import datetime
 
-from auth import (
+from .auth import (
     RegisterRequest, LoginRequest, TokenResponse, RefreshRequest,
     ChangePasswordRequest, UserResponse,
 )
-from database import (
+from .database import (
     register_user, login_user, refresh_access_token, logout_user,
     get_user_by_id, change_user_password, get_supabase,
     create_case, update_case, get_user_cases, get_case_by_id,
     create_chat_session, get_user_sessions, save_chat_message, get_chat_history,
     get_recent_chat_history, save_session_upload, get_session_uploads,
 )
-from middleware import get_current_user, get_current_user_id
+from .middleware import get_current_user, get_current_user_id
 
 app = FastAPI(
     title="Cybercrime AI - API Gateway",

@@ -3,9 +3,9 @@ import os
 import logging
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from auth import decode_token
-from database import get_user_by_id
-from auth import UserResponse
+from .auth import decode_token
+from .database import get_user_by_id
+from .auth import UserResponse
 
 logger = logging.getLogger("middleware")
 

@@ -8,7 +8,7 @@ import hashlib
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 
-from config import config
+from .config import config
 
 
 def _count_tokens_approx(text: str) -> int:

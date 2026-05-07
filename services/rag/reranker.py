@@ -6,8 +6,8 @@ Cross-encoder reranking alone solves nearly 80% of lookup-style queries.
 import logging
 from typing import List, Optional
 
-from config import config
-from retriever import RetrievalResult
+from .config import config
+from .retriever import RetrievalResult
 
 logger = logging.getLogger("rag.reranker")
 

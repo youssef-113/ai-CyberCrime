@@ -1,24 +1,102 @@
+"""PDF Generator Service - WeasyPrint + Jinja2"""
 import os
-from jinja2 import Environment, FileSystemLoader
-from weasyprint import HTML, CSS
- 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
-ASSETS_DIR = os.path.join(BASE_DIR, "assets")
- 
- 
-def generate_pdf(title: str, body: str, output_path: str = "complaint.pdf"):
-    env = Environment(loader=FileSystemLoader(TEMPLATES_DIR))
-    template = env.get_template("complaint_ar.html")
-    html_content = template.render(title=title, body=body)
- 
-    HTML(string=html_content, base_url=BASE_DIR).write_pdf(output_path)
-    print(f"PDF saved to: {output_path}")
- 
- 
-if __name__ == "__main__":
-    generate_pdf(
-        title="شكوى قانونية",
-        body="بناءً على أحكام القانون المصري، يتقدم المشتكي بهذه الشكوى الرسمية.",
-        output_path="complaint.pdf"
-    )
+import base64
+from typing import List, Optional
+from datetime import datetime
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from pydantic import BaseModel
+
+from .generate import generate_complaint_pdf
+
+app = FastAPI(title="PDF Generator Service", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+OUTPUTS_DIR = os.getenv("OUTPUTS_DIR", "/outputs")
+
+
+class PDFRequest(BaseModel):
+    case_id: str
+    crime_type: str
+    evidence_summary: str
+    timeline: List[dict] = []
+    law_articles: List[dict] = []
+    score: int = 0
+    grade: str = "C"
+    complainant_name: str = ""
+    language: str = "ar"
+
+
+@app.get("/health")
+def health():
+    return {"status": "healthy", "service": "pdf-gen", "version": "1.0.0"}
+
+
+@app.post("/generate")
+async def generate_pdf(request: PDFRequest):
+    try:
+        pdf_bytes = generate_complaint_pdf(
+            case_id=request.case_id,
+            crime_type=request.crime_type,
+            evidence_summary=request.evidence_summary,
+            timeline=request.timeline,
+            law_articles=request.law_articles,
+            score=request.score,
+            grade=request.grade,
+            complainant_name=request.complainant_name,
+            language=request.language,
+        )
+
+        filename = f"{request.case_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        filepath = os.path.join(OUTPUTS_DIR, filename)
+        os.makedirs(OUTPUTS_DIR, exist_ok=True)
+
+        with open(filepath, "wb") as f:
+            f.write(pdf_bytes)
+
+        pdf_b64 = base64.b64encode(pdf_bytes).decode()
+
+        return {
+            "status": "generated",
+            "filename": filename,
+            "path": filepath,
+            "size_bytes": len(pdf_bytes),
+            "pdf_base64": pdf_b64,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate-download")
+async def generate_pdf_download(request: PDFRequest):
+    try:
+        pdf_bytes = generate_complaint_pdf(
+            case_id=request.case_id,
+            crime_type=request.crime_type,
+            evidence_summary=request.evidence_summary,
+            timeline=request.timeline,
+            law_articles=request.law_articles,
+            score=request.score,
+            grade=request.grade,
+            complainant_name=request.complainant_name,
+            language=request.language,
+        )
+
+        filename = f"{request.case_id}_complaint.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

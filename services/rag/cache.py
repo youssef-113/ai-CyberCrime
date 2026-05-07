@@ -16,7 +16,7 @@ from typing import Optional, Dict, Any
 
 import numpy as np
 
-from config import config
+from .config import config
 
 logger = logging.getLogger("rag.cache")
 

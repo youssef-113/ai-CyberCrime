@@ -7,7 +7,7 @@ import hashlib
 import logging
 from typing import List, Dict, Any
 
-from config import config
+from .config import config
 
 logger = logging.getLogger("rag.ingestion")
 
@@ -227,7 +227,7 @@ def index_articles(
     2. Generate embeddings
     3. Index into ChromaDB
     """
-    from chunker import chunk_article
+    from .chunker import chunk_article
 
     all_chunks = []
 

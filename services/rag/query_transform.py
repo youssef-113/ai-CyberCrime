@@ -12,7 +12,7 @@ from typing import List, Dict, Optional
 
 import httpx
 
-from config import config
+from .config import config
 
 logger = logging.getLogger("rag.query_transform")
 

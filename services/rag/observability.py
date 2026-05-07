@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from collections import deque
 
-from config import config
+from .config import config
 
 logger = logging.getLogger("rag.observability")
 

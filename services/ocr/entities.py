@@ -11,8 +11,8 @@ Extracts structured entities from OCR text:
 import re
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
-from models import ExtractedEntity, EntityCollection
-from arabic_utils import normalize_arabic_text
+from .models import ExtractedEntity, EntityCollection
+from .arabic_utils import normalize_arabic_text
 
 
 # Egyptian phone number patterns

@@ -6,8 +6,8 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 
 from supabase import create_client, Client
-from auth import hash_password, verify_password, decode_token
-from auth import (
+from .auth import hash_password, verify_password, decode_token
+from .auth import (
     RegisterRequest, LoginRequest, TokenResponse, UserResponse,
     RefreshRequest, ChangePasswordRequest,
     create_access_token, create_refresh_token,

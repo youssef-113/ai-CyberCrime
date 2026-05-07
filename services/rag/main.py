@@ -17,7 +17,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from config import config
+from .config import config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("rag.main")
@@ -106,19 +106,19 @@ def health():
     }
 
     try:
-        from retriever import get_retriever_stats
+        from .retriever import get_retriever_stats
         status["chroma"] = get_retriever_stats()
     except Exception as e:
         status["chroma"] = {"error": str(e)}
 
     try:
-        from cache import get_cache_stats
+        from .cache import get_cache_stats
         status["cache"] = get_cache_stats()
     except Exception as e:
         status["cache"] = {"error": str(e)}
 
     try:
-        from observability import get_metrics_summary
+        from .observability import get_metrics_summary
         status["metrics"] = get_metrics_summary()
     except Exception as e:
         status["metrics"] = {"error": str(e)}
@@ -128,9 +128,9 @@ def health():
 
 @app.get("/stats")
 def get_stats():
-    from cache import get_cache_stats
-    from observability import get_metrics_summary
-    from retriever import get_retriever_stats
+    from .cache import get_cache_stats
+    from .observability import get_metrics_summary
+    from .retriever import get_retriever_stats
 
     return {
         "config": {
@@ -159,10 +159,10 @@ async def retrieve(request: RetrieveRequest):
     enhanced_query = f"{request.crime_type}: {request.query}" if request.crime_type else request.query
 
     # Import citation validation
-    from citations import validate_citations
+    from .citations import validate_citations
 
     try:
-        from cache import lookup
+        from .cache import lookup
         cached = lookup(enhanced_query, request.tenant_id)
 
         if cached:
@@ -193,7 +193,7 @@ async def retrieve(request: RetrieveRequest):
 
     if request.transform_strategy != "none":
         try:
-            from query_transform import transform_query
+            from .query_transform import transform_query
             transform_result = await transform_query(enhanced_query, request.transform_strategy)
             queries = transform_result["queries"]
             strategy_used = transform_result["strategy"]
@@ -203,7 +203,7 @@ async def retrieve(request: RetrieveRequest):
     all_results = []
 
     try:
-        from retriever import hybrid_retrieve
+        from .retriever import hybrid_retrieve
 
         for q in queries:
             results = hybrid_retrieve(
@@ -229,7 +229,7 @@ async def retrieve(request: RetrieveRequest):
             unique_results.append(r)
 
     try:
-       from reranker import rerank
+       from .reranker import rerank
        unique_results = rerank(request.query, unique_results, top_n=request.top_k)
     except Exception as e:
        logger.warning(f"Reranking failed: {e}")
@@ -257,7 +257,7 @@ async def retrieve(request: RetrieveRequest):
     latency = (time.time() - start_time) * 1000
 
     try:
-        from observability import record_retrieval, RetrievalMetric
+        from .observability import record_retrieval, RetrievalMetric
 
         record_retrieval(
             RetrievalMetric(
@@ -283,7 +283,7 @@ async def retrieve(request: RetrieveRequest):
     }
 
     try:
-        from cache import store
+        from .cache import store
         store(enhanced_query, response_dict, request.tenant_id)
     except Exception as e:
         logger.warning(f"Cache store failed: {e}")
@@ -315,7 +315,7 @@ async def index_articles(request: IndexRequest, background_tasks: BackgroundTask
 
     if request.async_ingest:
         try:
-            from ingestion import get_celery_app
+            from .ingestion import get_celery_app
 
             celery_app = get_celery_app()
 
@@ -339,7 +339,7 @@ async def index_articles(request: IndexRequest, background_tasks: BackgroundTask
             logger.warning(f"Celery queue failed, falling back to sync: {e}")
 
     try:
-        from ingestion import index_articles as ingest_articles
+        from .ingestion import index_articles as ingest_articles
 
         result = ingest_articles(request.articles, request.tenant_id)
 
@@ -360,7 +360,7 @@ async def index_articles(request: IndexRequest, background_tasks: BackgroundTask
 async def index_single_document(document: Dict[str, Any], tenant_id: str = "default"):
     """Index a single document into ChromaDB."""
 
-    from ingestion import index_articles as ingest_articles
+    from .ingestion import index_articles as ingest_articles
 
     try:
         result = ingest_articles([document], tenant_id)
@@ -373,7 +373,7 @@ async def index_single_document(document: Dict[str, Any], tenant_id: str = "defa
 
 @app.post("/faithfulness", response_model=FaithfulnessResponse)
 def check_faithfulness(request: FaithfulnessRequest):
-    from observability import check_faithfulness
+    from .observability import check_faithfulness
 
     result = check_faithfulness(
         request.query,
@@ -400,7 +400,7 @@ def list_tenants():
         }
 
     try:
-        from retriever import _get_chroma
+        from .retriever import _get_chroma
 
         client = _get_chroma()
         collections = client.list_collections()
@@ -439,7 +439,7 @@ async def delete_collection(tenant_id: str):
     collection_name = f"{config.multi_tenant.namespace_prefix}{tenant_id}"
 
     try:
-        from retriever import _get_chroma
+        from .retriever import _get_chroma
 
         client = _get_chroma()
         client.delete_collection(collection_name)
@@ -462,7 +462,7 @@ class ValidateCitationsRequest(BaseModel):
 @app.post("/validate-citations", response_model=CitationValidationResult)
 async def validate_citations_endpoint(request: ValidateCitationsRequest):
     """Validate that cited articles exist in ChromaDB with matching crime_type."""
-    from citations import validate_citations
+    from .citations import validate_citations
 
     result = validate_citations(
         request.articles,

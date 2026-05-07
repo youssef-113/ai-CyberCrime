@@ -36,9 +36,9 @@ except ImportError:
     PADDLEOCR_AVAILABLE = False
     logger.warning("PaddleOCR not available")
 
-from preprocessing import preprocess_image
-from arabic_utils import normalize_arabic_text, detect_language
-from models import OCRResult, EvidenceBlock, ConfidenceScore
+from .preprocessing import preprocess_image
+from .arabic_utils import normalize_arabic_text, detect_language
+from .models import OCRResult, EvidenceBlock, ConfidenceScore
 
 
 # ─── Confidence Thresholds ─────────────────────────────────────────────

@@ -1,6 +1,6 @@
 from typing import Dict, List
 
-from crime_definitions import CRIME_DEFINITIONS
+from .crime_definitions import CRIME_DEFINITIONS
 
 
 def validate_required_entities(crime_type: str, entities: Dict) -> List[str]:

@@ -20,7 +20,7 @@ def build_knowledge_base(
     tenant_id: str = "default",
 ):
     """Index law articles into ChromaDB with rich metadata and parent-child chunking."""
-    from ingestion import index_articles
+    from .ingestion import index_articles
 
     articles_path = articles_path or os.getenv(
         "ARTICLES_PATH",

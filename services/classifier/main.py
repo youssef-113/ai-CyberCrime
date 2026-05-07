@@ -7,13 +7,13 @@ import os
 import json
 import re
 
-from prompts import CLASSIFICATION_PROMPT
-from models import ClassificationOutput
-from crime_definitions import CRIME_DEFINITIONS
-from validators import build_validation_notes
-from article_mapping import get_suggested_articles
-from arabic_utils import normalize_arabic
-from metrics_runtime import start_timer, record_classification, get_runtime_metrics
+from .prompts import CLASSIFICATION_PROMPT
+from .models import ClassificationOutput
+from .crime_definitions import CRIME_DEFINITIONS
+from .validators import build_validation_notes
+from .article_mapping import get_suggested_articles
+from .arabic_utils import normalize_arabic
+from .metrics_runtime import start_timer, record_classification, get_runtime_metrics
 
 app = FastAPI(title="Classifier Service", version="1.0.0")
 
