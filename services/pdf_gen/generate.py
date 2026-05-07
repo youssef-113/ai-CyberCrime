@@ -43,9 +43,14 @@ def generate_complaint_pdf(
     
     # Add RTL CSS for Arabic
     if language == "ar":
-        css = CSS(string="""
-            body { direction: rtl; font-family: 'DejaVu Sans', Arial, sans-serif; }
-            .text-left { text-align: right !important; }
+        font_path = os.path.join(os.path.dirname(__file__), "assets", "fonts", "Amiri-Regular.ttf")
+        css = CSS(string=f"""
+            @font-face {{
+                font-family: 'Amiri';
+                src: url('{font_path}');
+            }}
+            body {{ direction: rtl; font-family: 'Amiri', serif; }}
+            .text-left {{ text-align: right !important; }}
         """)
         pdf_bytes = html.write_pdf(stylesheets=[css])
     else:
