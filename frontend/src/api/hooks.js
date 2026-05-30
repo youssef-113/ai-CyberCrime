@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import * as endpoints from './endpoints'
+import { useAuth } from '../context/AuthContext'
 
 export function useAnalyze() {
   const [loading, setLoading] = useState(false)
@@ -27,11 +28,21 @@ export function useAnalyze() {
 }
 
 export function useChat(caseContext, initialSessionId = null) {
+  const { sessionId: authSessionId, tenantId, createChatSession, getCurrentSessionId } = useAuth()
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [sessionLoading, setSessionLoading] = useState(false)
-  const sessionIdRef = useRef(initialSessionId || `session_${Date.now()}`)
+  const sessionIdRef = useRef(initialSessionId || authSessionId || `session_${Date.now()}`)
+
+  // Sync with auth session when it becomes available
+  useEffect(() => {
+    const currentSession = getCurrentSessionId()
+    if (currentSession && !initialSessionId) {
+      sessionIdRef.current = currentSession
+      loadHistory(currentSession)
+    }
+  }, [authSessionId])
 
   // Load chat history when initialSessionId changes
   useEffect(() => {
@@ -68,9 +79,20 @@ export function useChat(caseContext, initialSessionId = null) {
     const userMessage = { role: 'user', content, timestamp: new Date().toISOString() }
     setMessages((prev) => [...prev, userMessage])
 
+    // Ensure we have a valid session ID
+    let sid = sessionIdRef.current
+    if (!sid || sid.startsWith('session_')) {
+      try {
+        sid = await createChatSession()
+        sessionIdRef.current = sid
+      } catch (err) {
+        console.warn('Could not create session, using current:', err)
+      }
+    }
+
     try {
       const response = await endpoints.sendChatMessage(
-        sessionIdRef.current,
+        sid,
         content,
         caseContext
       )
@@ -89,12 +111,17 @@ export function useChat(caseContext, initialSessionId = null) {
     } finally {
       setLoading(false)
     }
-  }, [caseContext])
+  }, [caseContext, createChatSession])
 
-  const clearChat = useCallback(() => {
+  const clearChat = useCallback(async () => {
     setMessages([])
-    sessionIdRef.current = `session_${Date.now()}`
-  }, [])
+    try {
+      const newSid = await createChatSession()
+      sessionIdRef.current = newSid
+    } catch {
+      sessionIdRef.current = `session_${Date.now()}`
+    }
+  }, [createChatSession])
 
   return { messages, sendMessage, loading, error, clearChat, sessionId: sessionIdRef.current, sessionLoading, loadHistory }
 }

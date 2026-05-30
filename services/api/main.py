@@ -2,12 +2,18 @@
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import List, Optional
 import httpx
 import uuid
 import os
+import logging
+import asyncio
 from datetime import datetime
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from .auth import (
     RegisterRequest, LoginRequest, TokenResponse, RefreshRequest,
@@ -20,7 +26,9 @@ from .database import (
     create_chat_session, get_user_sessions, save_chat_message, get_chat_history,
     get_recent_chat_history, save_session_upload, get_session_uploads,
 )
-from .middleware import get_current_user, get_current_user_id
+from .middleware import get_current_user, get_current_user_id, get_session_tenant, require_session
+
+logger = logging.getLogger("api.gateway")
 
 app = FastAPI(
     title="Cybercrime AI - API Gateway",
@@ -30,11 +38,23 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("CORS_ORIGIN", "http://localhost:3000")],
+    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(","),
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*", "X-Session-ID", "X-Tenant-ID"],
     allow_credentials=True,
 )
+
+# ── Rate Limiting ──────────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request, exc):
+    """Handle rate limit exceeded errors"""
+    return JSONResponse(
+        status_code=429,
+        content={"error": "Rate limit exceeded. Try again later."},
+    )
 
 # Service URLs (from environment or defaults)
 SERVICE_URLS = {
@@ -144,6 +164,142 @@ async def list_users(current_user: UserResponse = Depends(get_current_user)):
     db = get_supabase()
     result = db.table("users").select("id, email, full_name, is_active, is_verified, created_at").execute()
     return {"users": result.data or []}
+
+
+@app.post("/auth/verify")
+async def verify_session(current_user: UserResponse = Depends(get_current_user)):
+    """Verify current session is valid. Returns tenant_id and active sessions."""
+    tenant_id = f"user_{current_user.id}"
+
+    # Get or create an active session for the user
+    sessions = await get_user_sessions(current_user.id)
+    active_session = None
+    for s in sessions:
+        if s.get("is_active", False):
+            active_session = s
+            break
+
+    if not active_session:
+        session_id = str(uuid.uuid4())
+        session_data = await create_chat_session(current_user.id, session_id)
+        active_session = session_data or {"session_id": session_id}
+
+    return {
+        "valid": True,
+        "user": current_user,
+        "tenant_id": tenant_id,
+        "session_id": active_session.get("session_id", ""),
+        "message": "Session is valid",
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  SESSION MANAGEMENT ROUTES (auth required)
+# ══════════════════════════════════════════════════════════════════════════
+
+class CreateSessionRequest(BaseModel):
+    case_id: Optional[str] = None
+    context: Optional[dict] = None
+
+
+@app.post("/sessions")
+async def create_session(
+    request: CreateSessionRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Create a new chat session for the user"""
+    session_id = str(uuid.uuid4())
+    session_data = await create_chat_session(
+        user_id=user_id,
+        session_id=session_id,
+        case_context=request.context
+    )
+    
+    if not session_data:
+        raise HTTPException(status_code=500, detail="Failed to create session")
+    
+    return {
+        "session_id": session_data.get("session_id") or session_id,
+        "user_id": session_data.get("user_id") or user_id,
+        "is_active": session_data.get("is_active", True),
+        "created_at": session_data.get("created_at", datetime.utcnow().isoformat()),
+        "case_id": session_data.get("case_id") or request.case_id
+    }
+
+
+@app.get("/sessions/user/{user_id}")
+async def list_user_sessions(
+    user_id: str = Depends(get_current_user_id),
+    limit: int = 10,
+    offset: int = 0,
+):
+    """List all user's chat sessions (paginated)"""
+    db = get_supabase()
+    
+    # Get total count
+    count_result = db.table("chat_sessions")\
+        .select("*", count="exact")\
+        .eq("user_id", user_id)\
+        .execute()
+    total = count_result.count or 0
+    
+    # Get paginated results
+    result = db.table("chat_sessions")\
+        .select("*")\
+        .eq("user_id", user_id)\
+        .order("created_at", desc=True)\
+        .range(offset, offset + limit - 1)\
+        .execute()
+    
+    sessions = [
+        {
+            "session_id": s["session_id"],
+            "user_id": s["user_id"],
+            "is_active": s["is_active"],
+            "created_at": s["created_at"],
+            "case_id": s.get("case_id")
+        }
+        for s in result.data
+    ]
+    
+    return {"sessions": sessions, "total": total, "limit": limit, "offset": offset}
+
+
+@app.get("/sessions/{session_id}")
+async def get_session_details(
+    session_id: str,
+    user_id: str = Depends(get_current_user_id)
+):
+    """Get session details (verify ownership)"""
+    db = get_supabase()
+    
+    result = db.table("chat_sessions")\
+        .select("*")\
+        .eq("session_id", session_id)\
+        .eq("user_id", user_id)\
+        .execute()
+    
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session = result.data[0]
+    
+    # Get message count
+    messages_result = db.table("chat_messages")\
+        .select("*", count="exact")\
+        .eq("session_id", session_id)\
+        .execute()
+    
+    return {
+        "session_id": session["session_id"],
+        "user_id": session["user_id"],
+        "is_active": session["is_active"],
+        "created_at": session["created_at"],
+        "updated_at": session.get("updated_at"),
+        "case_id": session.get("case_id"),
+        "message_count": messages_result.count or 0,
+        "tenant_id": f"user_{user_id}"
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -400,22 +556,30 @@ async def get_verification_audit(
 #  CHAT ROUTES (protected, user-scoped)
 # ══════════════════════════════════════════════════════════════════════════
 
-@app.get("/sessions")
+@app.get("/sessions/list")
 async def list_sessions(user_id: str = Depends(get_current_user_id)):
     """List all chat sessions for the current user."""
     sessions = await get_user_sessions(user_id)
     return {"sessions": sessions}
 
+class ChatRequest(BaseModel):
+    session_id: str
+    user_message: str
+    case_context: Optional[dict] = None
+
+
 @app.post("/chat")
 async def chat(
-    session_id: str,
-    user_message: str,
-    case_context: Optional[dict] = None,
+    request: ChatRequest,
     user_id: str = Depends(get_current_user_id),
 ):
     """Send a chat message - user-scoped with persistence and RAG-enhanced context."""
     import logging
     logger = logging.getLogger("api.chat")
+
+    session_id = request.session_id
+    user_message = request.user_message
+    case_context = request.case_context
 
     # Ensure session belongs to user
     sessions = await get_user_sessions(user_id)
@@ -426,7 +590,7 @@ async def chat(
         await create_chat_session(user_id, session_id, case_context=case_context)
 
     # Save user message
-    await save_chat_message(session_id, "user", user_message)
+    await save_chat_message(session_id, "user", user_message, user_id=user_id)
 
     # ── Retrieve Recent Chat History (last 5 messages for context) ─────────────────
     recent_history = await get_recent_chat_history(session_id, limit=5)
@@ -515,7 +679,7 @@ async def chat(
     # Save assistant reply
     reply_text = reply_data.get("reply", "")
     citations = reply_data.get("citations", [])
-    await save_chat_message(session_id, "assistant", reply_text, citations)
+    await save_chat_message(session_id, "assistant", reply_text, citations, user_id=user_id)
 
     return reply_data
 
@@ -589,13 +753,23 @@ async def chat_upload_documents(
         "message": f"Uploaded {len(files)} file(s). {indexed_count} document chunks indexed for chat."
     }
 
+class SessionRequest(BaseModel):
+    session_id: str
+
+
 @app.post("/chat/reset")
 async def reset_chat(
-    session_id: str,
+    request: SessionRequest,
     user_id: str = Depends(get_current_user_id),
 ):
     """Reset a chat session."""
-    return {"message": "Chat session reset", "session_id": session_id}
+    # Verify session belongs to user
+    sessions = await get_user_sessions(user_id)
+    user_session_ids = [s["session_id"] for s in sessions]
+    if request.session_id not in user_session_ids:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"message": "Chat session reset", "session_id": request.session_id}
+
 
 @app.get("/chat/history")
 async def chat_history(

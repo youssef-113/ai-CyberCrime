@@ -1,18 +1,21 @@
-import { createClient } from '@supabase/supabase-js'
+/**
+ * DEPRECATED: Direct Supabase client is no longer used in the frontend.
+ * 
+ * All database operations must go through the backend API endpoints:
+ * - Authentication: /auth/login, /auth/register, /auth/verify
+ * - Chat Sessions: /sessions, /chat endpoints
+ * - Cases: /cases, /analyze endpoints
+ * - Verifications: /verify, /verifications endpoints
+ * - Data Queries: Backend API endpoints only
+ * 
+ * See /frontend/src/api/endpoints.js for all available API functions.
+ * See /frontend/src/context/AuthContext.jsx for authentication context.
+ */
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+console.warn(
+  'DEPRECATED: Direct Supabase client access is no longer supported. All data must go through backend API endpoints.'
+)
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing Supabase environment variables. Please check your .env file.')
-}
-
-export const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-  },
-})
-
+// Stub for backward compatibility (if imported anywhere)
+export const supabase = null
 export default supabase

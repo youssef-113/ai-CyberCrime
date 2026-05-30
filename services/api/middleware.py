@@ -1,7 +1,7 @@
 """Authentication Middleware - FastAPI Dependencies"""
 import os
 import logging
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from .auth import decode_token
 from .database import get_user_by_id
@@ -14,6 +14,13 @@ security = HTTPBearer(auto_error=False)
 
 # ── Optional: Skip auth for development ──────────────────────────────────────
 AUTH_DISABLED = os.getenv("AUTH_DISABLED", "false").lower() == "true"
+
+
+def get_session_tenant(request: Request) -> dict:
+    """Extract X-Session-ID and X-Tenant-ID from request headers."""
+    session_id = request.headers.get("X-Session-ID", "")
+    tenant_id = request.headers.get("X-Tenant-ID", "")
+    return {"session_id": session_id, "tenant_id": tenant_id}
 
 
 async def get_current_user(
@@ -101,3 +108,15 @@ async def get_optional_user(
         return user
     except HTTPException:
         return None
+
+
+def require_session(request: Request, user_id: str = Depends(get_current_user_id)) -> str:
+    """Dependency that ensures a valid session ID is present.
+    Returns the session_id from header or raises 400."""
+    session_id = request.headers.get("X-Session-ID", "")
+    if not session_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Session-ID header is required for this endpoint",
+        )
+    return session_id

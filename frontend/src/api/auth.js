@@ -25,6 +25,11 @@ export const authApi = {
     return response.data
   },
 
+  verify: async () => {
+    const response = await client.post(`${AUTH_BASE}/verify`)
+    return response.data
+  },
+
   getMe: async () => {
     const response = await client.get(`${AUTH_BASE}/me`)
     return response.data
@@ -40,6 +45,30 @@ export const authApi = {
 
   getUsers: async () => {
     const response = await client.get(`${AUTH_BASE}/users`)
+    return response.data
+  },
+
+  createSession: async (data = {}) => {
+    const response = await client.post('/sessions', data)
+    return response.data
+  },
+
+  listSessions: async (limit = 10, offset = 0) => {
+    const response = await client.get(`/sessions/list`, {
+      params: { limit, offset },
+    })
+    return response.data
+  },
+
+  getSession: async (sessionId) => {
+    const response = await client.get(`/sessions/${sessionId}`)
+    return response.data
+  },
+
+  getChatHistory: async (sessionId, limit = 50) => {
+    const response = await client.get('/chat/history', {
+      params: { session_id: sessionId, limit },
+    })
     return response.data
   },
 }

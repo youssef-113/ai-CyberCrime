@@ -91,7 +91,7 @@ export const getChatHistory = async (sessionId) => {
 }
 
 export const listSessions = async () => {
-  const response = await client.get('/sessions')
+  const response = await client.get('/sessions/list')
   return response.data
 }
 

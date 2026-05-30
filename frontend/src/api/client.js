@@ -16,6 +16,19 @@ client.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+
+    // Inject session ID if available
+    const sessionId = localStorage.getItem('cybercrime_session_id')
+    if (sessionId) {
+      config.headers['X-Session-ID'] = sessionId
+    }
+
+    // Inject tenant ID for RAG isolation
+    const tenantId = localStorage.getItem('cybercrime_tenant_id')
+    if (tenantId) {
+      config.headers['X-Tenant-ID'] = tenantId
+    }
+
     return config
   },
   (error) => Promise.reject(error)
@@ -48,7 +61,7 @@ client.interceptors.response.use(
           const resp = await client.post('/auth/refresh', { refresh_token: refreshToken })
           const { access_token, refresh_token: newRefresh } = resp.data
           localStorage.setItem('cybercrime_access_token', access_token)
-          localStorage.setItem('cybercrime_refresh_token', newRefresh)
+          localStorage.setItem('cybercrime_refresh_token', newRefresh || refreshToken)
           originalRequest.headers.Authorization = `Bearer ${access_token}`
           return client(originalRequest)
         } catch {
@@ -56,6 +69,8 @@ client.interceptors.response.use(
           localStorage.removeItem('cybercrime_access_token')
           localStorage.removeItem('cybercrime_refresh_token')
           localStorage.removeItem('cybercrime_user')
+          localStorage.removeItem('cybercrime_session_id')
+          localStorage.removeItem('cybercrime_tenant_id')
           window.location.href = '/login'
         }
       }

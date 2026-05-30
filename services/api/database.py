@@ -311,8 +311,8 @@ async def get_user_sessions(user_id: str) -> List[dict]:
     return result.data
 
 
-async def save_chat_message(session_id: str, role: str, content: str, citations: Optional[list] = None) -> dict:
-    """Save a chat message."""
+async def save_chat_message(session_id: str, role: str, content: str, citations: Optional[list] = None, user_id: str = None) -> dict:
+    """Save a chat message (with optional user_id for isolation)."""
     db = get_supabase()
     data = {
         "session_id": session_id,
@@ -320,6 +320,10 @@ async def save_chat_message(session_id: str, role: str, content: str, citations:
         "content": content,
         "citations": json.dumps(citations) if citations else "[]",
     }
+    # Add user_id if provided for better query optimization
+    if user_id:
+        data["user_id"] = user_id
+    
     result = db.table("chat_messages").insert(data).execute()
     return result.data[0] if result.data else None
 

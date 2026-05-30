@@ -6,6 +6,7 @@ import Input from '../components/ui/Input'
 import { Spinner } from '../components/ui/ProgressIndicator'
 import { useChat } from '../api/hooks'
 import { useCase } from '../context/CaseContext'
+import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { getTranslation } from '../utils/translations'
 import { uploadChatDocuments } from '../api/endpoints'
@@ -15,7 +16,8 @@ import clsx from 'clsx'
 export default function ChatbotPage() {
   const { analysisResult } = useCase()
   const caseContext = analysisResult || {}
-  const { messages, sendMessage, loading, error, clearChat, sessionId } = useChat(caseContext)
+  const { sessionId: authSessionId, isAuthenticated } = useAuth()
+  const { messages, sendMessage, loading, error, clearChat, sessionId } = useChat(caseContext, authSessionId)
   const [input, setInput] = useState('')
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [uploading, setUploading] = useState(false)
