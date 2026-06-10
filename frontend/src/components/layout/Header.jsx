@@ -36,7 +36,7 @@ export default function Header({ onMenuToggle }) {
           )}
           <Link to="/" className="flex items-center gap-2.5 group">
             <motion.img
-              src="/images/a-cinematic-high-tech-startup-poster-fea_LgTTcXLOTAuD74ES1Dq5mA_TGuuJNbMRGusz7UyZ_TJnw.jpeg"
+              src="/images/logo cybercrime.png"
               alt="Cybercrime AI Logo"
               className="w-10 h-10 rounded-lg object-cover"
               whileHover={{ rotate: 10 }}

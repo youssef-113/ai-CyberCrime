@@ -8,8 +8,13 @@ export const authApi = {
     return response.data
   },
 
-  register: async (email, password, full_name) => {
-    const response = await client.post(`${AUTH_BASE}/register`, { email, password, full_name })
+  register: async (email, password, full_name, phone = null) => {
+    const response = await client.post(`${AUTH_BASE}/register`, {
+      email,
+      password,
+      full_name,
+      phone
+    })
     return response.data
   },
 
@@ -49,7 +54,13 @@ export const authApi = {
   },
 
   createSession: async (data = {}) => {
-    const response = await client.post('/sessions', data)
+    const response = await client.post('/sessions', {
+      ...data,
+      linked_case_id: data.linked_case_id || null,
+      model_used: data.model_used || null,
+      temperature: data.temperature || 0.3,
+      max_tokens: data.max_tokens || 800,
+    })
     return response.data
   },
 

@@ -2,103 +2,314 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Cybercrime Complaint Report</title>
+    <title>Cybercrime Complaint Report - Cybercrime AI System</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            font-size: 12pt;
-            line-height: 1.6;
+        @page {
+            size: A4;
             margin: 2cm;
+            @bottom-center {
+                content: "Page " counter(page) " of " counter(pages);
+                font-size: 9pt;
+                color: #666;
+            }
         }
-        h1 {
-            text-align: center;
-            font-size: 18pt;
-            border-bottom: 2px solid #000;
-            padding-bottom: 10px;
-        }
-        h2 {
-            font-size: 14pt;
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 11pt;
+            line-height: 1.8;
             color: #333;
-            margin-top: 20px;
         }
+        
         .header {
             text-align: center;
             margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #1a5490;
         }
-        .info-box {
-            border: 1px solid #ccc;
-            padding: 10px;
+        
+        .logo-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .logo {
+            max-width: 120px;
+            max-height: 80px;
+        }
+        
+        h1 {
+            font-size: 20pt;
+            color: #1a5490;
             margin: 10px 0;
-            background: #f9f9f9;
-        }
-        .timeline-item {
-            border-left: 3px solid #007bff;
-            padding-left: 10px;
-            margin: 10px 0;
-        }
-        .article-box {
-            border: 1px solid #ddd;
-            padding: 10px;
-            margin: 5px 0;
-            background: #fafafa;
-        }
-        .score {
-            font-size: 16pt;
             font-weight: bold;
-            color: #28a745;
         }
-        .footer {
-            margin-top: 50px;
-            text-align: center;
-            font-size: 10pt;
+        
+        .subtitle {
+            font-size: 12pt;
             color: #666;
+            margin-bottom: 5px;
+        }
+        
+        h2 {
+            font-size: 14pt;
+            color: #1a5490;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e0e0e0;
+            font-weight: bold;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .info-item {
+            background: #f8f9fa;
+            padding: 12px 15px;
+            border-left: 4px solid #1a5490;
+            border-radius: 4px;
+        }
+        
+        .info-item label {
+            font-weight: bold;
+            color: #1a5490;
+            font-size: 10pt;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .info-item span {
+            font-size: 11pt;
+            color: #333;
+        }
+        
+        .section-box {
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .timeline {
+            margin: 15px 0;
+        }
+        
+        .timeline-item {
+            position: relative;
+            padding-left: 25px;
+            margin: 15px 0;
+            border-left: 3px solid #1a5490;
+            background: #f8f9fa;
+            padding: 12px 15px 12px 15px;
+            border-radius: 4px 0 0 4px;
+        }
+        
+        .timeline-item::before {
+            content: "●";
+            position: absolute;
+            left: -10px;
+            top: 12px;
+            font-size: 20px;
+            color: #1a5490;
+            background: white;
+            padding: 0 5px;
+        }
+        
+        .timeline-date {
+            font-weight: bold;
+            color: #1a5490;
+            font-size: 10pt;
+            margin-bottom: 5px;
+        }
+        
+        .article-box {
+            background: #fff9e6;
+            border: 1px solid #ffd700;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+        }
+        
+        .article-number {
+            font-weight: bold;
+            color: #b8860b;
+            font-size: 12pt;
+            margin-bottom: 8px;
+        }
+        
+        .article-text {
+            font-size: 10pt;
+            line-height: 1.7;
+            margin-bottom: 8px;
+        }
+        
+        .penalty {
+            background: #fff3cd;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 10pt;
+            color: #856404;
+        }
+        
+        .score-container {
+            text-align: center;
+            padding: 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            color: white;
+            margin: 20px 0;
+        }
+        
+        .score-value {
+            font-size: 36pt;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .score-grade {
+            font-size: 18pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .score-label {
+            font-size: 11pt;
+            opacity: 0.9;
+        }
+        
+        .evidence-summary {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #17a2b8;
+            line-height: 1.8;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+            text-align: center;
+        }
+        
+        .footer-logo {
+            max-width: 60px;
+            margin-bottom: 10px;
+        }
+        
+        .footer-text {
+            font-size: 9pt;
+            color: #666;
+            margin: 5px 0;
+        }
+        
+        .footer-brand {
+            font-size: 10pt;
+            font-weight: bold;
+            color: #1a5490;
+            margin-top: 10px;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 9pt;
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        
+        .badge-crime {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .badge-status {
+            background: #28a745;
+            color: white;
         }
     </style>
 </head>
 <body>
     <div class="header">
+        <div class="logo-container">
+            <img src="file:///app/assets/images/logo.png" alt="Logo" class="logo" onerror="this.style.display='none'">
+        </div>
         <h1>Cybercrime Complaint Report</h1>
-        <p>Under Egyptian Law No. 175 of 2018 on Combating Information Technology Crimes</p>
+        <p class="subtitle">Cybercrime AI System</p>
+        <p class="subtitle">Under Egyptian Law No. 175 of 2018 on Combating Information Technology Crimes</p>
     </div>
 
     <h2>Complaint Information</h2>
-    <div class="info-box">
-        <p><strong>Case ID:</strong> {{ case_id }}</p>
-        <p><strong>Crime Type:</strong> {{ crime_type }}</p>
-        <p><strong>Date Filed:</strong> {{ generated_date }}</p>
-        <p><strong>Complainant:</strong> {{ complainant_name }}</p>
+    <div class="info-grid">
+        <div class="info-item">
+            <label>Case ID</label>
+            <span>{{ case_id }}</span>
+        </div>
+        <div class="info-item">
+            <label>Crime Type</label>
+            <span>{{ crime_type }} <span class="badge badge-crime">Cybercrime</span></span>
+        </div>
+        <div class="info-item">
+            <label>Date Filed</label>
+            <span>{{ generated_date }}</span>
+        </div>
+        <div class="info-item">
+            <label>Complainant</label>
+            <span>{{ complainant_name }}</span>
+        </div>
     </div>
 
     <h2>Evidence Summary</h2>
-    <p>{{ evidence_summary }}</p>
+    <div class="evidence-summary">
+        {{ evidence_summary }}
+    </div>
 
     <h2>Timeline of Events</h2>
-    {% for event in timeline %}
-    <div class="timeline-item">
-        <p><strong>{{ event.date }}:</strong> {{ event.description }}</p>
+    <div class="timeline">
+        {% for event in timeline %}
+        <div class="timeline-item">
+            <div class="timeline-date">{{ event.date }}</div>
+            <div>{{ event.description }}</div>
+        </div>
+        {% endfor %}
     </div>
-    {% endfor %}
 
     <h2>Applicable Legal Articles</h2>
     {% for article in law_articles %}
     <div class="article-box">
-        <p><strong>Article {{ article.article_number }} - {{ article.law }}</strong></p>
-        <p>{{ article.text }}</p>
+        <div class="article-number">Article {{ article.article_number }} - {{ article.law }}</div>
+        <div class="article-text">{{ article.text }}</div>
         {% if article.penalty_ar %}
-        <p><strong>Penalty:</strong> {{ article.penalty_ar }}</p>
+        <div class="penalty">
+            <strong>Penalty:</strong> {{ article.penalty_ar }}
+        </div>
         {% endif %}
     </div>
     {% endfor %}
 
     <h2>Evidence Strength Assessment</h2>
-    <div class="info-box">
-        <p class="score">{{ score }}/100 - {{ grade }}</p>
-        <p>All claims verified against provided evidence</p>
+    <div class="score-container">
+        <div class="score-label">Evidence Strength Score</div>
+        <div class="score-value">{{ score }}/100</div>
+        <div class="score-grade">{{ grade }}</div>
+        <div class="score-label">All claims verified against provided evidence</div>
     </div>
 
     <div class="footer">
-        <p>Generated by AI Cybercrime Evidence Builder System</p>
-        <p>Egypt - 2026</p>
+        <img src="file:///app/assets/images/logo.png" alt="Logo" class="footer-logo" onerror="this.style.display='none'">
+        <p class="footer-text">Generated by Cybercrime AI System</p>
+        <p class="footer-text">Arab Republic of Egypt - 2026</p>
+        <p class="footer-brand">Cybercrime AI System</p>
     </div>
 </body>
 </html>

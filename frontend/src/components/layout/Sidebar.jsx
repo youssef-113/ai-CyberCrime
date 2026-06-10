@@ -3,7 +3,6 @@ import { Home, Search, LayoutDashboard, MessageSquare, Settings, FileText, Chevr
 import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
 import { getTranslation } from '../../utils/translations'
-import { toastSuccess } from '../../components/ui/Alert'
 import clsx from 'clsx'
 
 const navItems = [
@@ -25,7 +24,6 @@ export default function Sidebar() {
   const handleLogout = async () => {
     try {
       await logout()
-      toastSuccess(t('auth.logoutSuccess'))
       navigate('/login')
     } catch {
       // Logout error is handled in AuthContext
@@ -41,7 +39,7 @@ export default function Sidebar() {
     >
       <div className="p-3 border-b border-neutral-800/50">
         <img
-          src="/images/a-cinematic-high-tech-startup-poster-fea_LgTTcXLOTAuD74ES1Dq5mA_TGuuJNbMRGusz7UyZ_TJnw.jpeg"
+          src="/images/logo cybercrime.png"
           alt="Cybercrime AI Logo"
           className={clsx(
             'rounded-lg object-cover mx-auto',

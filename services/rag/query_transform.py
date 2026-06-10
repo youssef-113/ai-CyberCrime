@@ -5,7 +5,7 @@ Query transformation solves many retrieval issues:
 - RAG-Fusion: generates multiple query variations and merges results
 - Step-back prompting: helps with complex, multi-step questions
 
-LLM Provider: Ollama (local) by default, falls back to Anthropic if configured.
+LLM Provider: Ollama (local) by default, falls back to Groq if configured.
 """
 import logging
 from typing import List, Dict, Optional
@@ -46,48 +46,36 @@ async def _call_ollama(prompt: str, system: str = "", max_tokens: int = 300) -> 
         return ""
 
 
-async def _call_anthropic(prompt: str, system: str = "", max_tokens: int = 300) -> str:
-    """Call Anthropic API as fallback LLM."""
-    if not config.query_transform.llm_api_key:
-        return ""
-
+async def _call_groq(prompt: str, system: str = "", max_tokens: int = 300) -> str:
+    """Call Groq API as fallback LLM."""
+    from services.common.llm_client import llm_request
+    
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": config.query_transform.llm_api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": config.query_transform.llm_model,
-                    "max_tokens": max_tokens,
-                    "system": system or "You are a legal research assistant specializing in Egyptian cybercrime law.",
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-                timeout=15.0,
-            )
-            data = resp.json()
-            return data["content"][0]["text"].strip()
+        full_prompt = f"{system}\n\n{prompt}" if system else prompt
+        result = await llm_request(
+            prompt=full_prompt,
+            max_tokens=max_tokens,
+            temperature=0.3,
+        )
+        return result if result else ""
     except Exception as e:
-        logger.warning(f"Anthropic call failed: {e}")
+        logger.warning(f"Groq call failed: {e}")
         return ""
 
 
 async def _call_llm(prompt: str, system: str = "", max_tokens: int = 300) -> str:
-    """Call LLM for query transformation. Tries Ollama first, then Anthropic."""
+    """Call LLM for query transformation. Tries Ollama first, then Groq."""
     provider = config.query_transform.llm_provider
 
     if provider == "ollama":
         result = await _call_ollama(prompt, system, max_tokens)
         if result:
             return result
-        # Fall through to Anthropic if Ollama fails
-        logger.info("Ollama failed, trying Anthropic fallback")
+        # Fall through to Groq if Ollama fails
+        logger.info("Ollama failed, trying Groq fallback")
 
-    if provider in ("anthropic", "ollama"):
-        result = await _call_anthropic(prompt, system, max_tokens)
+    if provider in ("groq", "ollama"):
+        result = await _call_groq(prompt, system, max_tokens)
         if result:
             return result
 

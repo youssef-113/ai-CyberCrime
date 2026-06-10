@@ -1,7 +1,6 @@
 # Legal Chatbot System Prompt — Version 1
-**Day 7** | Owner: Youssef Bassiony (YB)
 
-## Design Principles
+# Design Principles
 
 1. **Case-aware**: The chatbot receives the full case context (evidence, crime type, verified claims, retrieved articles) and answers about THIS specific case — not generic advice.
 
@@ -41,7 +40,3 @@
 **A:** بموجب المادة 26 من قانون مكافحة جرائم تقنية المعلومات رقم 175 لسنة 2018، يُعاقب على جريمة الابتزاز الإلكتروني بالحبس مدة لا تقل عن سنتين ولا تجاوز خمس سنوات، وبغرامة لا تقل عن مائة ألف جنيه ولا تجاوز ثلاثمائة ألف جنيه. يُنصح بالتواصل فوراً مع مباحث الإنترنت على الرقم 108.
 
 ## Changelog
-
-| Version | Date  | Change |
-|---------|-------|--------|
-| v1      | Day 7 | Initial case-aware legal chatbot prompt |

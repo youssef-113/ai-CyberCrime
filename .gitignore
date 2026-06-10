@@ -22,5 +22,4 @@ outputs/
 qdrant_storage/
 assist/
 .vscode/
-.github/
 .agents/

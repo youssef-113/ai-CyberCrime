@@ -1,5 +1,8 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { authApi } from '../api/auth'
+import { ActionAlerts, mapErrorMessage, closeAlert } from '../utils/alertConfig'
+import Swal from 'sweetalert2'
 
 const AuthContext = createContext(null)
 
@@ -66,10 +69,17 @@ function getStoredAuth() {
 }
 
 export function AuthProvider({ children }) {
+  const location = useLocation()
   const [auth, setAuth] = useState(getStoredAuth)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [sessionValidated, setSessionValidated] = useState(false)
+
+  // Close any open SweetAlert modals on route change to prevent blocking interactions
+  useEffect(() => {
+    Swal.close()
+    closeAlert()
+  }, [location.pathname])
 
   const persistAuth = useCallback((token, refreshToken, user) => {
     const tenantId = `user_${user.id}`
@@ -128,10 +138,12 @@ export function AuthProvider({ children }) {
           console.warn('Could not create session:', err)
         }
 
+        ActionAlerts.loginSuccess()
         return data
       } catch (err) {
-        const message = err.response?.data?.detail || err.message || 'Login failed'
+        const message = mapErrorMessage(err)
         setError(message)
+        ActionAlerts.authError(err)
         throw err
       } finally {
         setLoading(false)
@@ -160,10 +172,12 @@ export function AuthProvider({ children }) {
           console.warn('Could not create session:', err)
         }
 
+        ActionAlerts.registerSuccess()
         return data
       } catch (err) {
-        const message = err.response?.data?.detail || err.message || 'Registration failed'
+        const message = mapErrorMessage(err)
         setError(message)
+        ActionAlerts.authError(err)
         throw err
       } finally {
         setLoading(false)
@@ -173,6 +187,7 @@ export function AuthProvider({ children }) {
   )
 
   const loginAsDemo = useCallback(() => {
+    setLoading(false)
     localStorage.setItem(DEMO_KEY, 'true')
     localStorage.setItem(USER_KEY, JSON.stringify(DEMO_USER))
     localStorage.setItem(SESSION_ID_KEY, 'demo-session')
@@ -188,6 +203,7 @@ export function AuthProvider({ children }) {
     })
     setError(null)
     setSessionValidated(true)
+    ActionAlerts.loginSuccess()
   }, [])
 
   const logout = useCallback(async () => {
@@ -199,6 +215,7 @@ export function AuthProvider({ children }) {
       }
     }
     clearAuth()
+    ActionAlerts.logoutSuccess()
   }, [auth.isDemo, auth.refreshToken, clearAuth])
 
   const refreshTokens = useCallback(async () => {

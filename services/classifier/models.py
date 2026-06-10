@@ -17,16 +17,12 @@ class Claim(BaseModel):
 class ClassificationOutput(BaseModel):
     crime_type: Literal[
         "blackmail",
-        "sextortion",
-        "financial_fraud",
-        "phishing",
-        "identity_theft",
-        "cyber_threat",
+        "scam",
+        "threat",
         "defamation",
-        "hate_speech",
-        "privacy_violation",
-        "data_breach",
-        "account_hacking",
+        "privacy",
+        "identity_theft",
+        "general",
         "unknown",
     ]
     confidence: float = Field(ge=0.0, le=1.0)

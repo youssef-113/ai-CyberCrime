@@ -14,6 +14,7 @@ from .validators import build_validation_notes
 from .article_mapping import get_suggested_articles
 from .arabic_utils import normalize_arabic
 from .metrics_runtime import start_timer, record_classification, get_runtime_metrics
+from services.common.llm_client import llm_request
 
 app = FastAPI(title="Classifier Service", version="1.0.0")
 
@@ -31,6 +32,8 @@ LLM_MODEL = os.getenv("LLM_MODEL", "claude-3-haiku-20240307")
 class ClassificationRequest(BaseModel):
     text: str
     entities: dict
+    user_id: Optional[str] = None  # For metrics tracking
+    session_id: Optional[str] = None  # For metrics tracking
 
 
 CRIME_TYPES = list(CRIME_DEFINITIONS.keys())
@@ -62,25 +65,7 @@ async def classify(request: ClassificationRequest):
     fallback_note = ""
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": LLM_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": LLM_MODEL,
-                    "max_tokens": 1000,
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-                timeout=30.0,
-            )
-
-            result = response.json()
-            content = result.get("content", [{}])[0].get("text", "")
-
+        content = await llm_request(prompt, model=LLM_MODEL, max_tokens=1000)
     except Exception as e:
         fallback_note = f"LLM call failed: {str(e)}"
 

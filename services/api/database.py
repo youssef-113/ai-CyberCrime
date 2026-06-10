@@ -62,6 +62,11 @@ async def register_user(req: RegisterRequest) -> TokenResponse:
         "full_name": req.full_name,
         "is_active": True,
         "is_verified": False,
+        "role": "user",  # Default role for new users
+        "language": "ar",
+        "timezone": "Africa/Cairo",
+        "notification_preferences": {},
+        "mfa_enabled": False,
     }
 
     result = db.table("users").insert(user_data).execute()

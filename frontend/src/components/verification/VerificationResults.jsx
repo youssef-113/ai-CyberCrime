@@ -3,6 +3,7 @@ import { Card, CardBody } from '../ui/Card'
 import Badge from '../ui/Badge'
 import Button from '../ui/Button'
 import { useTheme } from '../../context/ThemeContext'
+import { getTranslation } from '../../utils/translations'
 
 /**
  * VerificationResults - Displays verification outcome with score, grade, and timeline
@@ -32,11 +33,13 @@ export function VerificationResults({ result, onViewAudit, className = '' }) {
     case_id,
     status,
     rounds,
+    rounds_left,
     round_details = [],
     final_score = 0,
     score_breakdown = {},
     grade = 'WEAK',
     timeline = {},
+    missing_evidence = [],
   } = result
 
   const getStatusColor = (status) => {
@@ -113,6 +116,9 @@ export function VerificationResults({ result, onViewAudit, className = '' }) {
           <div className="text-right">
             <div className="text-sm text-blue-100">Rounds Completed</div>
             <div className="text-2xl font-bold text-white">{rounds}</div>
+            {rounds_left != null && (
+              <div className="mt-1 text-xs text-blue-100">{rounds_left} {language === 'ar' ? 'جولات متبقية' : 'rounds left'}</div>
+            )}
           </div>
         </div>
       </div>
@@ -137,7 +143,7 @@ export function VerificationResults({ result, onViewAudit, className = '' }) {
 
         <div className="py-2">
           {activeTab === 'overview' && (
-            <OverviewPanel status={status} grade={grade} rounds={rounds} timeline={timeline} />
+            <OverviewPanel status={status} grade={grade} rounds={rounds} timeline={timeline} missingEvidence={missing_evidence} />
           )}
           {activeTab === 'rounds' && <RoundsPanel rounds={round_details} />}
           {activeTab === 'timeline' && <TimelinePanel timeline={timeline} />}
@@ -148,7 +154,7 @@ export function VerificationResults({ result, onViewAudit, className = '' }) {
   )
 }
 
-function OverviewPanel({ status, grade, rounds, timeline }) {
+function OverviewPanel({ status, grade, rounds, timeline, missingEvidence = [] }) {
   const { language } = useTheme()
   const t = (key) => getTranslation(language, key)
   const statusMessages = {
@@ -191,7 +197,21 @@ function OverviewPanel({ status, grade, rounds, timeline }) {
               {rec}
             </li>
           ))}
-        </ul>
+      </ul>
+
+      {missingEvidence.length > 0 && (
+        <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-4">
+          <h4 className="font-medium text-yellow-900">{language === 'ar' ? 'أدلة مفقودة' : 'Missing Evidence'}</h4>
+          <ul className="mt-2 space-y-2 text-sm text-yellow-900">
+            {missingEvidence.map((item, index) => (
+              <li key={index} className="flex items-start gap-2">
+                <span className="mt-1">•</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       </div>
 
       {timeline?.date_coverage !== undefined && (

@@ -10,9 +10,9 @@ from typing import List, Optional
 from .strategies import get_strategy
 from .timeline import build_validated_timeline, timeline_summary
 
-LLM_API_KEY = os.getenv("GROQ_API_KEY", os.getenv("LLM_API_KEY", ""))
+# Use shared LLM client with GROQ primary + fallback
+from services.common.llm_client import llm_request
 LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1/chat/completions")
 
 
 async def run_verification_agents(
@@ -152,7 +152,7 @@ STRUCTURED CHALLENGES ALREADY IDENTIFIED:
 
 Add 1-2 additional nuanced challenges beyond the above. Be harsh but factual."""
 
-    llm_response = await call_llm(prompt)
+    llm_response = await llm_request(prompt, model=LLM_MODEL, max_tokens=500, temperature=0.3)
     combined = structured_text + "\n" + llm_response
 
     return {
@@ -221,7 +221,7 @@ Respond in valid JSON only:
     "confidence": 0.0
 }}"""
 
-    raw_response = await call_llm(prompt)
+    raw_response = await llm_request(prompt, model=LLM_MODEL, max_tokens=500, temperature=0.3)
 
     parsed = _parse_judge_json(raw_response)
 
@@ -281,29 +281,5 @@ def _infer_status(raw: str) -> str:
     return "NEEDS_USER_REVIEW"
 
 
-async def call_llm(prompt: str) -> str:
-    """Call Groq LLM API (OpenAI-compatible endpoint)."""
-
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(
-                LLM_BASE_URL,
-                headers={
-                    "Authorization": f"Bearer {LLM_API_KEY}",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": LLM_MODEL,
-                    "max_tokens": 500,
-                    "temperature": 0.3,
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-                timeout=30.0,
-            )
-
-            result = response.json()
-            # OpenAI-compatible response format
-            return result.get("choices", [{}])[0].get("message", {}).get("content", "No response")
-        except Exception as e:
-            return f"Error: {str(e)}"
+# local LLM helper removed in favor of services.common.llm_client.llm_request
  

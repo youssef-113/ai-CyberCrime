@@ -7,13 +7,13 @@ import Input from '../components/ui/Input'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { getTranslation } from '../utils/translations'
-import { toastSuccess } from '../components/ui/Alert'
+import { showError } from '../utils/alertConfig'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const { login, loginAsDemo, loading, error, setError } = useAuth()
+  const { login, loginAsDemo, loading } = useAuth()
   const { language, isRtl } = useTheme()
   const navigate = useNavigate()
 
@@ -21,24 +21,22 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setError(null)
 
     if (!email.trim()) {
-      setError('Email is required')
+      showError('❌ Validation Error', 'Please enter your email address')
       return
     }
     if (!password) {
-      setError('Password is required')
+      showError('❌ Validation Error', 'Please enter your password')
       return
     }
 
     try {
       await login(email, password)
-      toastSuccess(t('auth.loginSuccess'))
-      // Delay navigation to let the toast be visible
-      setTimeout(() => navigate('/dashboard'), 1500)
+      // Delay navigation to let the alert be visible
+      setTimeout(() => navigate('/dashboard'), 2500)
     } catch (err) {
-      // Error is set in AuthContext
+      // Error alert is already shown by ActionAlerts.authError in AuthContext
     }
   }
 
@@ -47,7 +45,7 @@ export default function LoginPage() {
       {/* Background — same banner image + gradient overlay as LandingPage hero */}
       <div className="absolute inset-0 overflow-hidden">
         <img
-          src="/images/a-cinematic-high-tech-startup-poster-fea_LgTTcXLOTAuD74ES1Dq5mA_TGuuJNbMRGusz7UyZ_TJnw.jpeg"
+          src="/images/hero cybercrime.png"
           alt=""
           className="w-full h-full object-cover opacity-20"
         />
@@ -87,7 +85,7 @@ export default function LoginPage() {
           >
             <Link to="/" className="inline-flex items-center gap-3 mb-6">
               <img
-                src="/images/a-cinematic-high-tech-startup-poster-fea_LgTTcXLOTAuD74ES1Dq5mA_TGuuJNbMRGusz7UyZ_TJnw.jpeg"
+                src="/images/logo cybercrime.png"
                 alt="Cybercrime AI Logo"
                 className="w-12 h-12 rounded-xl object-cover shadow-glow"
               />
@@ -101,17 +99,6 @@ export default function LoginPage() {
             </p>
           </motion.div>
 
-          {/* Error Display */}
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-5 p-3 bg-danger/10 border border-danger/20 rounded-lg"
-            >
-              <p className="text-danger-light text-sm">{error}</p>
-            </motion.div>
-          )}
-
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <motion.div
@@ -123,7 +110,7 @@ export default function LoginPage() {
                 label={t('auth.email')}
                 type="email"
                 value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(null) }}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 autoComplete="email"
                 required
@@ -140,7 +127,7 @@ export default function LoginPage() {
                 label={t('auth.password')}
                 type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(null) }}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
                 autoComplete="current-password"
                 required
@@ -197,7 +184,6 @@ export default function LoginPage() {
               size="lg"
               onClick={() => {
                 loginAsDemo()
-                toastSuccess(t('auth.loginSuccess'))
                 setTimeout(() => navigate('/dashboard'), 1500)
               }}
             >

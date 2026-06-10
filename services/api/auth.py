@@ -173,6 +173,13 @@ class UserResponse(BaseModel):
     full_name: Optional[str] = None
     is_active: bool
     is_verified: bool
+    phone: Optional[str] = None
+    language: str = "ar"
+    timezone: str = "Africa/Cairo"
+    notification_preferences: Dict = {}
+    mfa_enabled: bool = False
+    role: str = "user"  # 'user' | 'admin'
+    last_login_at: Optional[str] = None
     created_at: str
 
 

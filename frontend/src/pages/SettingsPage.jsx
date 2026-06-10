@@ -6,17 +6,22 @@ import { useTheme } from '../context/ThemeContext'
 import { LANGUAGES } from '../utils/constants'
 import { getTranslation } from '../utils/translations'
 import SystemStatus from '../components/admin/SystemStatus'
-import { toastSuccess } from '../components/ui/Alert'
+import useAlerts from '../hooks/useAlerts'
 
 export default function SettingsPage() {
   const { language, setLanguage, isRtl } = useTheme()
+  const alerts = useAlerts()
   
   const t = (key) => getTranslation(language, key)
 
   const handleLanguageChange = (code) => {
     setLanguage(code)
     const lang = LANGUAGES.find((l) => l.code === code)
-    toastSuccess(t('settings.languageDesc'))
+    alerts.success(
+      '🌐 Language Changed',
+      `Interface language has been changed to ${lang.label}`,
+      { timer: 2000 }
+    )
   }
 
   return (

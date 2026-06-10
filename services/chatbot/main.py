@@ -33,7 +33,11 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     session_id: str
-    citations: List[str]
+    citations: List[dict]
+    confidence_score: Optional[float] = None
+    model_used: Optional[str] = None
+    tokens_used: Optional[int] = None
+    latency_ms: Optional[int] = None
 
 
 class HealthResponse(BaseModel):

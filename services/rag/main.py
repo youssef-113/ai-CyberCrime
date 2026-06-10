@@ -38,6 +38,8 @@ class RetrieveRequest(BaseModel):
     top_k: int = 5
     tenant_id: str = "default"
     transform_strategy: str = "auto"
+    user_id: Optional[str] = None  # For retrieval_logs tracking
+    session_id: Optional[str] = None  # For retrieval_logs tracking
 
 
 class LawArticle(BaseModel):
@@ -72,6 +74,8 @@ class IndexRequest(BaseModel):
     articles: List[Dict[str, Any]]
     tenant_id: str = "default"
     async_ingest: bool = False
+    user_id: Optional[str] = None  # For document ownership tracking
+    case_id: Optional[str] = None  # For linking to cases
 
 
 class IndexResponse(BaseModel):
@@ -203,15 +207,19 @@ async def retrieve(request: RetrieveRequest):
     all_results = []
 
     try:
-        from .retriever import hybrid_retrieve
+        from .retriever import retrieve_and_validate
 
         for q in queries:
-            results = hybrid_retrieve(
+            rv = retrieve_and_validate(
                 q,
                 top_k=request.top_k * 2,
                 tenant_id=request.tenant_id,
+                crime_type=request.crime_type,
             )
-            all_results.extend(results)
+            # rv contains 'results' (list) and 'validation' dict
+            all_results.extend(rv.get("results", []))
+            # propagate validation for caching/metrics later if needed
+            validation = rv.get("validation")
 
     except Exception as e:
         logger.error(f"Hybrid retrieval failed: {e}")

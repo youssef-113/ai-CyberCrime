@@ -73,7 +73,11 @@ def health_check():
 
 
 @app.post("/extract", response_model=OCRResponse)
-async def extract_text(file: UploadFile = File(...)):
+async def extract_text(
+    file: UploadFile = File(...),
+    timeout: int = 30,
+    max_pages: int = 20
+):
     """
     Extract text and entities from uploaded image/PDF/text file
     
@@ -84,13 +88,32 @@ async def extract_text(file: UploadFile = File(...)):
     4. Normalize Arabic text
     5. Extract entities (phones, amounts, dates, accounts)
     6. Return structured response
+    
+    Security:
+    - Timeout protection (default 30s)
+    - Max pages limit (default 20)
+    - File size validation
     """
     if _ocr_engine is None:
         raise HTTPException(status_code=503, detail="OCR engine not initialized")
     
+    # Validate timeout and max_pages from environment or parameters
+    max_timeout = int(os.getenv("MAX_OCR_TIMEOUT", "30"))
+    max_pages_limit = int(os.getenv("MAX_OCR_PAGES", "20"))
+    
+    timeout = min(timeout, max_timeout)
+    max_pages = min(max_pages, max_pages_limit)
+    
     start_time = time.time()
     content = await file.read()
     tmp_path = None
+    
+    # Check file size (10MB limit)
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large. Maximum is 10MB"
+        )
     
     try:
         # Handle text files directly
@@ -100,12 +123,23 @@ async def extract_text(file: UploadFile = File(...)):
         # Process image/PDF
         tmp_path = await _save_temp_file(content, file.filename)
         
-        # Run OCR
-        ocr_result = _ocr_engine.process_image(
-            content,
-            file.filename,
-            block_id="E001"
-        )
+        # Run OCR with timeout protection
+        import asyncio
+        try:
+            ocr_result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _ocr_engine.process_image,
+                    content,
+                    file.filename,
+                    block_id="E001"
+                ),
+                timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(
+                status_code=408,
+                detail=f"OCR processing timeout after {timeout} seconds"
+            )
         
         # Extract entities from all blocks
         all_entities = []

@@ -219,6 +219,38 @@ def hybrid_retrieve(
     return vector_results[:top_k]
 
 
+def retrieve_and_validate(
+    query: str,
+    top_k: int = None,
+    tenant_id: str = "default",
+    collection_name: str = None,
+    crime_type: str = "",
+) -> dict:
+    """Run hybrid retrieve and validate returned articles against citation DB.
+
+    Returns dict: { "results": [RetrievalResult], "validation": {..} }
+    """
+    results = hybrid_retrieve(query=query, top_k=top_k, tenant_id=tenant_id, collection_name=collection_name)
+
+    # Convert to article-like dicts for validation
+    articles = []
+    for r in results:
+        meta = r.metadata or {}
+        articles.append({
+            "article_number": meta.get("article_number") or meta.get("id") or "",
+            "law": meta.get("law", ""),
+            "text": r.text,
+        })
+
+    # Validate citations
+    try:
+        from .citations import validate_citations
+        validation = validate_citations(articles, crime_type, tenant_id)
+    except Exception as e:
+        validation = {"status": "FAILED", "error": str(e), "valid": [], "invalid": []}
+
+    return {"results": results, "validation": validation}
+
 def get_retriever_stats() -> Dict[str, Any]:
     stats = {
         "vector_db": "chromadb",

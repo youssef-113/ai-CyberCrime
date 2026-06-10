@@ -63,8 +63,6 @@ class QueryTransformConfig:
     rag_fusion_enabled: bool = os.getenv("RAG_FUSION_ENABLED", "false").lower() == "true"
     rag_fusion_queries: int = int(os.getenv("RAG_FUSION_QUERIES", "3"))
     step_back_enabled: bool = os.getenv("STEP_BACK_ENABLED", "false").lower() == "true"
-    llm_api_key: str = os.getenv("LLM_API_KEY", "")
-    llm_model: str = os.getenv("LLM_MODEL", "claude-3-haiku-20240307")
     llm_provider: str = os.getenv("LLM_PROVIDER", "ollama")
 
 

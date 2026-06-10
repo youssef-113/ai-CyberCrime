@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { getTranslation } from '../utils/translations'
 import { validatePasswordStrength } from '../utils/validators'
-import { toastSuccess, toastError } from '../components/ui/Alert'
+import { showError } from '../utils/alertConfig'
 
 const PASSWORD_RULES = [
   { key: 'length', label: 'At least 8 characters', test: (p) => p.length >= 8 },
@@ -24,7 +24,7 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [fullName, setFullName] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const { register, loginAsDemo, loading, error, setError } = useAuth()
+  const { register, loginAsDemo, loading } = useAuth()
   const { language, isRtl } = useTheme()
   const navigate = useNavigate()
 
@@ -43,27 +43,26 @@ export default function SignupPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setError(null)
 
     if (!email.trim()) {
-      setError('Email is required')
+      showError('❌ Validation Error', 'Please enter your email address')
       return
     }
     if (!passwordValidation.valid) {
-      setError('Password does not meet security requirements')
+      showError('❌ Weak Password', 'Your password does not meet the security requirements')
       return
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match')
+      showError('❌ Password Mismatch', 'The passwords you entered do not match')
       return
     }
 
     try {
       await register(email, password, fullName || null)
-      toastSuccess(t('auth.registerSuccess'))
-      setTimeout(() => navigate('/dashboard'), 1500)
+      // Delay navigation to let the alert be visible
+      setTimeout(() => navigate('/dashboard'), 2500)
     } catch (err) {
-      // Error is set in AuthContext
+      // Error alert is already shown by ActionAlerts.authError in AuthContext
     }
   }
 
@@ -72,7 +71,7 @@ export default function SignupPage() {
       {/* Background — same banner image + gradient overlay as LandingPage hero */}
       <div className="absolute inset-0 overflow-hidden">
         <img
-          src="/images/a-cinematic-high-tech-startup-poster-fea_LgTTcXLOTAuD74ES1Dq5mA_TGuuJNbMRGusz7UyZ_TJnw.jpeg"
+          src="/images/hero cybercrime.png"
           alt=""
           className="w-full h-full object-cover opacity-20"
         />
@@ -112,7 +111,7 @@ export default function SignupPage() {
           >
             <Link to="/" className="inline-flex items-center gap-3 mb-6">
               <img
-                src="/images/a-cinematic-high-tech-startup-poster-fea_LgTTcXLOTAuD74ES1Dq5mA_TGuuJNbMRGusz7UyZ_TJnw.jpeg"
+                src="/images/logo cybercrime.png"
                 alt="Cybercrime AI Logo"
                 className="w-12 h-12 rounded-xl object-cover shadow-glow"
               />
@@ -126,17 +125,6 @@ export default function SignupPage() {
             </p>
           </motion.div>
 
-          {/* Error Display */}
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-5 p-3 bg-danger/10 border border-danger/20 rounded-lg"
-            >
-              <p className="text-danger-light text-sm">{error}</p>
-            </motion.div>
-          )}
-
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <motion.div
@@ -149,7 +137,7 @@ export default function SignupPage() {
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="John Doe"
+                placeholder="Joe"
                 autoComplete="name"
               />
             </motion.div>
@@ -163,7 +151,7 @@ export default function SignupPage() {
                 label={t('auth.email')}
                 type="email"
                 value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(null) }}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 autoComplete="email"
                 required
@@ -180,7 +168,7 @@ export default function SignupPage() {
                 label={t('auth.password')}
                 type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(null) }}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="Create a strong password"
                 autoComplete="new-password"
                 required
@@ -242,7 +230,7 @@ export default function SignupPage() {
                 label={t('auth.confirmPassword')}
                 type="password"
                 value={confirmPassword}
-                onChange={(e) => { setConfirmPassword(e.target.value); setError(null) }}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-enter your password"
                 autoComplete="new-password"
                 required
@@ -291,8 +279,7 @@ export default function SignupPage() {
               size="lg"
               onClick={() => {
                 loginAsDemo()
-                toastSuccess(t('auth.loginSuccess'))
-                navigate('/dashboard')
+                setTimeout(() => navigate('/dashboard'), 1500)
               }}
             >
               <Zap className="w-5 h-5 text-warning" />

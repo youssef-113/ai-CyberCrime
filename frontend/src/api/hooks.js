@@ -5,16 +5,72 @@ import { useAuth } from '../context/AuthContext'
 export function useAnalyze() {
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [stage, setStage] = useState(null)
   const [error, setError] = useState(null)
+  const eventSourceRef = useRef(null)
+  const { token } = useAuth()
+
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+      }
+    }
+  }, [])
 
   const analyze = useCallback(async (files, jsonMode = true) => {
     setLoading(true)
     setProgress(0)
+    setStage(null)
     setError(null)
+
+    const cleanup = () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+      }
+    }
+
     try {
-      const fn = jsonMode ? endpoints.analyzeEvidenceJson : endpoints.analyzeEvidence
-      const data = await fn(files, (p) => setProgress(p))
-      return data
+      if (jsonMode) {
+        const data = await endpoints.analyzeEvidenceJson(files, (p) => setProgress(p))
+        return data
+      }
+
+      const response = await endpoints.analyzeEvidenceBackground(files)
+      const caseId = response?.case_id
+      if (!caseId) {
+        throw new Error('Failed to start background analysis')
+      }
+
+      return await new Promise((resolve, reject) => {
+        eventSourceRef.current = endpoints.subscribeCaseEvents(
+          caseId,
+          token,
+          (payload) => {
+            if (payload.stage) {
+              setStage(payload.stage)
+            }
+            if (typeof payload.progress === 'number') {
+              setProgress(payload.progress)
+            }
+          },
+          (payload) => {
+            cleanup()
+            if (payload.result) {
+              resolve(payload.result)
+            } else {
+              resolve(payload)
+            }
+          },
+          (error) => {
+            cleanup()
+            const message = error?.message || 'Event stream failed'
+            setError(message)
+            reject(new Error(message))
+          }
+        )
+      })
     } catch (err) {
       const message = err.response?.data?.detail || err.message || 'Analysis failed'
       setError(message)
@@ -22,9 +78,9 @@ export function useAnalyze() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [token])
 
-  return { analyze, loading, progress, error }
+  return { analyze, loading, progress, stage, error }
 }
 
 export function useChat(caseContext, initialSessionId = null) {
@@ -94,13 +150,19 @@ export function useChat(caseContext, initialSessionId = null) {
       const response = await endpoints.sendChatMessage(
         sid,
         content,
-        caseContext
+        caseContext,
+        'ar', // default language
+        messages.slice(-10).map(m => ({ role: m.role, content: m.content })) // recent history
       )
       const aiMessage = {
         role: 'assistant',
         content: response.reply || response.content || response,
         timestamp: new Date().toISOString(),
         citations: response.citations,
+        confidence_score: response.confidence_score,
+        model_used: response.model_used,
+        tokens_used: response.tokens_used,
+        latency_ms: response.latency_ms,
       }
       setMessages((prev) => [...prev, aiMessage])
       return aiMessage
@@ -111,7 +173,7 @@ export function useChat(caseContext, initialSessionId = null) {
     } finally {
       setLoading(false)
     }
-  }, [caseContext, createChatSession])
+  }, [caseContext, createChatSession, messages])
 
   const clearChat = useCallback(async () => {
     setMessages([])
@@ -342,11 +404,11 @@ export function useClassification() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const classify = useCallback(async (text, entities) => {
+  const classify = useCallback(async (text, entities, userId = null, sessionId = null) => {
     setLoading(true)
     setError(null)
     try {
-      const data = await endpoints.classifyCrime(text, entities)
+      const data = await endpoints.classifyCrime(text, entities, userId, sessionId)
       return data
     } catch (err) {
       const message = err.response?.data?.detail || err.message || 'Classification failed'
@@ -364,11 +426,11 @@ export function useRag() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const retrieve = useCallback(async (query, crimeType, topK = 5) => {
+  const retrieve = useCallback(async (query, crimeType, topK = 5, options = {}) => {
     setLoading(true)
     setError(null)
     try {
-      const data = await endpoints.retrieveArticles(query, crimeType, topK)
+      const data = await endpoints.retrieveArticles(query, crimeType, topK, options)
       return data
     } catch (err) {
       const message = err.response?.data?.detail || err.message || 'Article retrieval failed'
@@ -386,11 +448,11 @@ export function useVerification() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const verify = useCallback(async (evidenceText, entities, classification, articles) => {
+  const verify = useCallback(async (evidenceText, entities, classification, articles, userId = null, sourceCaseId = null) => {
     setLoading(true)
     setError(null)
     try {
-      const data = await endpoints.verifyEvidence(evidenceText, entities, classification, articles)
+      const data = await endpoints.verifyEvidence(evidenceText, entities, classification, articles, [], null, null, userId, sourceCaseId)
       return data
     } catch (err) {
       const message = err.response?.data?.detail || err.message || 'Verification failed'

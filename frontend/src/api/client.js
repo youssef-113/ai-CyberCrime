@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { sanitizeAPIRequest, validateInput } from '../utils/security'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -12,6 +13,16 @@ const client = axios.create({
 
 client.interceptors.request.use(
   (config) => {
+    // Sanitize request data to prevent XSS and injection attacks
+    if (config.data) {
+      try {
+        config.data = sanitizeAPIRequest(config.data)
+      } catch (error) {
+        console.error('Request sanitization error:', error)
+        return Promise.reject(error)
+      }
+    }
+
     const token = localStorage.getItem('cybercrime_access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`

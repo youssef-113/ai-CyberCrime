@@ -39,6 +39,11 @@ export const healthCheck = async () => {
   return response.data
 }
 
+export const getHealthAggregate = async () => {
+  const response = await client.get('/health/aggregate')
+  return response.data
+}
+
 export const getCaseHistory = async (params = {}) => {
   const response = await client.get('/cases', { params })
   return response.data
@@ -49,6 +54,58 @@ export const getCaseById = async (caseId) => {
   return response.data
 }
 
+export const getCaseStatus = async (caseId) => {
+  // Alias to getCaseById for status polling
+  const response = await client.get(`/cases/${caseId}`)
+  return response.data
+}
+
+export const analyzeEvidenceBackground = async (files) => {
+  const formData = new FormData()
+  files.forEach((f) => formData.append('files', f.file || f))
+
+  const config = {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }
+
+  const response = await client.post('/analyze', formData, config)
+  return response.data
+}
+
+export const subscribeCaseEvents = (caseId, accessToken, onUpdate, onDone, onError) => {
+  const baseUrl = client.defaults.baseURL || window.location.origin
+  const tokenQuery = accessToken ? `?access_token=${encodeURIComponent(accessToken)}` : ''
+  const source = new EventSource(`${baseUrl}/cases/${caseId}/events${tokenQuery}`)
+
+  const parseEvent = (event) => {
+    if (!event.data) return null
+    try {
+      return JSON.parse(event.data)
+    } catch (error) {
+      console.error('Failed to parse event data', error)
+      return null
+    }
+  }
+
+  source.addEventListener('update', (event) => {
+    const payload = parseEvent(event)
+    if (payload && onUpdate) onUpdate(payload)
+  })
+
+  source.addEventListener('done', (event) => {
+    const payload = parseEvent(event)
+    if (payload && onDone) onDone(payload)
+    source.close()
+  })
+
+  source.onerror = (error) => {
+    if (onError) onError(error)
+    source.close()
+  }
+
+  return source
+}
+
 export const downloadPdf = async (caseId) => {
   const response = await client.get(`/pdf/${caseId}`, {
     responseType: 'blob',
@@ -56,11 +113,23 @@ export const downloadPdf = async (caseId) => {
   return response.data
 }
 
-export const sendChatMessage = async (sessionId, message, caseContext) => {
+export const getCaseReport = async (caseId) => {
+  // Returns JSON report for a case; falls back to /cases/{id}
+  try {
+    const response = await client.get(`/cases/${caseId}`)
+    return response.data
+  } catch (e) {
+    throw e
+  }
+}
+
+export const sendChatMessage = async (sessionId, message, caseContext, language = 'ar', history = null) => {
   const response = await client.post('/chat', {
     session_id: sessionId,
     user_message: message,
     case_context: caseContext,
+    language,
+    history,
   })
   return response.data
 }
@@ -123,8 +192,13 @@ export const getOcrEnginesStatus = async () => {
   return response.data
 }
 
-export const classifyCrime = async (text, entities) => {
-  const response = await client.post('/classify', { text, entities })
+export const classifyCrime = async (text, entities, userId = null, sessionId = null) => {
+  const response = await client.post('/classify', {
+    text,
+    entities,
+    user_id: userId,
+    session_id: sessionId,
+  })
   return response.data
 }
 
@@ -135,6 +209,8 @@ export const retrieveArticles = async (query, crimeType, topK = 5, options = {})
     top_k: topK,
     tenant_id: options.tenantId || 'default',
     transform_strategy: options.transformStrategy || 'auto',
+    user_id: options.userId || null,
+    session_id: options.sessionId || null,
   })
   return response.data
 }
@@ -153,16 +229,18 @@ export const getRagStats = async () => {
   return response.data
 }
 
-export const indexArticles = async (articles, tenantId = 'default', asyncIngest = false) => {
+export const indexArticles = async (articles, tenantId = 'default', asyncIngest = false, userId = null, caseId = null) => {
   const response = await client.post('/index', {
     articles,
     tenant_id: tenantId,
     async_ingest: asyncIngest,
+    user_id: userId,
+    case_id: caseId,
   })
   return response.data
 }
 
-export const verifyEvidence = async (evidenceText, entities, classification, articles, evidenceBlocks = [], caseId = null, sessionId = null) => {
+export const verifyEvidence = async (evidenceText, entities, classification, articles, evidenceBlocks = [], caseId = null, sessionId = null, userId = null, sourceCaseId = null) => {
   const response = await client.post('/verify', {
     evidence_text: evidenceText,
     extracted_entities: entities,
@@ -171,6 +249,8 @@ export const verifyEvidence = async (evidenceText, entities, classification, art
     evidence_blocks: evidenceBlocks,
     case_id: caseId,
     session_id: sessionId,
+    user_id: userId,
+    source_case_id: sourceCaseId,
   })
   return response.data
 }
@@ -197,7 +277,7 @@ export const getVerificationAudit = async (verificationId) => {
 }
 
 // Trigger verification from existing case (for "Verify" button in case view)
-export const triggerCaseVerification = async (caseId, caseData) => {
+export const triggerCaseVerification = async (caseId, caseData, userId = null) => {
   const response = await client.post('/verify', {
     evidence_text: caseData.evidence_text || caseData.text,
     extracted_entities: caseData.entities || {},
@@ -206,6 +286,8 @@ export const triggerCaseVerification = async (caseId, caseData) => {
     evidence_blocks: caseData.evidence_blocks || [],
     case_id: caseId,
     session_id: caseData.session_id || null,
+    user_id: userId,
+    source_case_id: caseId,
   })
   return response.data
 }

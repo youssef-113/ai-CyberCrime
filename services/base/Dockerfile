@@ -16,9 +16,7 @@ RUN pip install --no-cache-dir \
     chromadb==0.4.18 \
     sentence-transformers==2.2.2 \
     weasyprint==60.2 \
-    jinja2==3.1.2 \
-    langchain==0.1.0 \
-    langchain-openai==0.0.5
+    jinja2==3.1.2
 
 # System deps for OCR and PDF
 RUN apt-get update && apt-get install -y \

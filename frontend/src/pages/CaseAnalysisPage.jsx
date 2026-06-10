@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, FileImage, FileText, X, AlertCircle, CheckCircle2, Clock, Phone, User, DollarSign, Scale, Download, RotateCcw, ChevronRight, Eye, Cpu, ArrowRight } from 'lucide-react'
 import { Card, CardBody } from '../components/ui/Card'
@@ -12,7 +12,7 @@ import { formatFileSize, getGradeInfo, getCrimeTypeInfo, scoreToColor, scoreToBg
 import { FILE_CONSTRAINTS, SCORE_WEIGHTS, VERIFICATION_STATUS } from '../utils/constants'
 import { useTheme } from '../context/ThemeContext'
 import { getTranslation } from '../utils/translations'
-import { toastSuccess, toastError } from '../components/ui/Alert'
+import useAlerts from '../hooks/useAlerts'
 
 const PIPELINE_STEPS_EN = ['Upload', 'OCR', 'Classify', 'RAG', 'Verify', 'Score', 'PDF']
 const PIPELINE_STEPS_AR = ['رفع', 'استخراج النص', 'تصنيف', 'استرجاع', 'تحقق', 'تقييم', 'تقرير']
@@ -22,9 +22,10 @@ export default function CaseAnalysisPage() {
   const [dragActive, setDragActive] = useState(false)
   const [pipelineStep, setPipelineStep] = useState(-1)
   const [result, setResult] = useState(null)
-  const { analyze, loading, progress, error } = useAnalyze()
+  const { analyze, loading, progress, stage, error } = useAnalyze()
   const { download, loading: downloading } = usePdfDownload()
   const { language, isRtl } = useTheme()
+  const alerts = useAlerts()
   
   const t = (key) => getTranslation(language, key)
   const pipelineSteps = language === 'ar' ? PIPELINE_STEPS_AR : PIPELINE_STEPS_EN
@@ -61,13 +62,13 @@ export default function CaseAnalysisPage() {
     const invalidNew = newFiles.filter((f) => !f.valid)
 
     if (invalidNew.length > 0) {
-      toastError(`${invalidNew.length} file(s) rejected: ${invalidNew[0].errors[0]}`)
+      alerts.uploadFailed(invalidNew[0].errors[0])
     }
 
     setFiles((prev) => {
       const combined = [...prev, ...validNew]
       if (combined.length > FILE_CONSTRAINTS.MAX_FILES) {
-        toastError(`Maximum ${FILE_CONSTRAINTS.MAX_FILES} files`)
+        alerts.error('❌ Too Many Files', `Maximum ${FILE_CONSTRAINTS.MAX_FILES} files allowed`)
         return combined.slice(0, FILE_CONSTRAINTS.MAX_FILES)
       }
       return combined
@@ -79,28 +80,52 @@ export default function CaseAnalysisPage() {
   const handleAnalyze = async () => {
     const validation = validateFileList(files.map((f) => f.file))
     if (!validation.valid) {
-      toastError(validation.errors[0])
+      alerts.uploadFailed(validation.errors[0])
       return
     }
 
     setPipelineStep(0)
     setResult(null)
+    alerts.analysisStart()
 
     try {
-      const stepTimer = setInterval(() => {
-        setPipelineStep((prev) => (prev < pipelineSteps.length - 1 ? prev + 1 : prev))
-      }, 4000)
-
-      const data = await analyze(files, true)
-      clearInterval(stepTimer)
+      const data = await analyze(files, false)
       setPipelineStep(pipelineSteps.length - 1)
       setResult(data)
-      toastSuccess('Analysis complete!')
+      alerts.close()
+      alerts.analysisComplete(Math.round(((data.verification?.final_score || 0) / 100) * 100))
     } catch (err) {
       setPipelineStep(-1)
-      toastError(error || 'Analysis failed')
+      alerts.analysisFailed(error || 'Analysis failed')
     }
   }
+
+  useEffect(() => {
+    if (stage) {
+      const stageIndex = {
+        ocr: 1,
+        classification: 2,
+        rag: 3,
+        verification: 4,
+        score: 5,
+        completed: pipelineSteps.length - 1,
+        failed: pipelineSteps.length - 1,
+      }[stage.toLowerCase()]
+
+      if (typeof stageIndex === 'number') {
+        setPipelineStep(Math.min(stageIndex, pipelineSteps.length - 1))
+        return
+      }
+    }
+
+    if (!loading) return
+    const thresholds = [0, 10, 25, 40, 60, 80, 100]
+    const nextStep = thresholds.reduce((current, threshold, index) => {
+      if (progress >= threshold) return index
+      return current
+    }, 0)
+    setPipelineStep(Math.min(nextStep, pipelineSteps.length - 1))
+  }, [progress, loading, pipelineSteps.length, pipelineSteps, stage])
 
   const handleDownload = async () => {
     if (result?.case_id) {
@@ -137,7 +162,7 @@ export default function CaseAnalysisPage() {
               <Spinner size="lg" />
               <PipelineProgress steps={pipelineSteps} currentStep={pipelineStep} className="w-full max-w-2xl" />
               <p className="text-neutral-400 text-sm">
-                {t('analysis.processing')} {pipelineSteps[pipelineStep]}...
+                {t('analysis.processing')} {stage || pipelineSteps[pipelineStep]}...
               </p>
               <ProgressBar value={progress} label={t('analysis.uploadProgress')} className="w-full max-w-md" />
             </div>

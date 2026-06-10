@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { getTranslation } from '../utils/translations'
 import { uploadChatDocuments } from '../api/endpoints'
-import { toastSuccess, toastError } from '../components/ui/Alert'
+import useAlerts from '../hooks/useAlerts'
 import clsx from 'clsx'
 
 export default function ChatbotPage() {
@@ -26,6 +26,7 @@ export default function ChatbotPage() {
   const inputRef = useRef(null)
   const fileInputRef = useRef(null)
   const { language, isRtl } = useTheme()
+  const alerts = useAlerts()
 
   const t = (key) => getTranslation(language, key)
 
@@ -46,6 +47,7 @@ export default function ChatbotPage() {
     const trimmed = input.trim()
     if (!trimmed || loading) return
     setInput('')
+    alerts.chatSent()
     await sendMessage(trimmed)
     inputRef.current?.focus()
   }
@@ -65,18 +67,19 @@ export default function ChatbotPage() {
     if (uploadedFiles.length === 0) return
 
     setUploading(true)
+    alerts.uploadStart()
     try {
       const result = await uploadChatDocuments(uploadedFiles, sessionId)
-      toastSuccess(result.message || `Uploaded ${result.indexed} document chunks`)
       setUploadedFiles([])
       setShowUpload(false)
+      alerts.uploadSuccess(uploadedFiles.length)
     } catch (err) {
-      toastError('Failed to upload documents')
+      alerts.uploadFailed(err)
       console.error(err)
     } finally {
       setUploading(false)
     }
-  }, [uploadedFiles, sessionId])
+  }, [uploadedFiles, sessionId, alerts])
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]" dir={isRtl ? 'rtl' : 'ltr'}>

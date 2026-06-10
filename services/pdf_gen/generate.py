@@ -3,6 +3,7 @@ from weasyprint import HTML, CSS
 from jinja2 import Environment, FileSystemLoader
 import os
 from typing import List
+from datetime import datetime
 
 def generate_complaint_pdf(
     case_id: str,
@@ -15,7 +16,7 @@ def generate_complaint_pdf(
     complainant_name: str,
     language: str = "ar"
 ) -> bytes:
-    """Generate PDF complaint"""
+    """Generate PDF complaint with professional styling"""
     
     # Setup Jinja2
     template_dir = os.path.join(os.path.dirname(__file__), "templates")
@@ -24,6 +25,12 @@ def generate_complaint_pdf(
     # Select template
     template_name = f"complaint_{language}.html"
     template = env.get_template(template_name)
+    
+    # Get current date in appropriate format
+    if language == "ar":
+        generated_date = datetime.now().strftime("%Y/%m/%d")
+    else:
+        generated_date = datetime.now().strftime("%B %d, %Y")
     
     # Render HTML
     html_content = template.render(
@@ -35,22 +42,21 @@ def generate_complaint_pdf(
         score=score,
         grade=grade,
         complainant_name=complainant_name,
-        generated_date="2024-01-01"  # Use actual date
+        generated_date=generated_date
     )
     
     # Convert to PDF
-    html = HTML(string=html_content)
+    html = HTML(string=html_content, base_url=os.path.dirname(__file__))
     
     # Add RTL CSS for Arabic
     if language == "ar":
-        font_path = os.path.join(os.path.dirname(__file__), "assets", "fonts", "Amiri-Regular.ttf")
+        font_path = os.path.join(os.path.dirname(__file__), "fonts", "Amiri-Regular.ttf")
         css = CSS(string=f"""
             @font-face {{
                 font-family: 'Amiri';
-                src: url('{font_path}');
+                src: url('file://{font_path}');
             }}
-            body {{ direction: rtl; font-family: 'Amiri', serif; }}
-            .text-left {{ text-align: right !important; }}
+            body {{ direction: rtl; font-family: 'Amiri', 'Traditional Arabic', serif; }}
         """)
         pdf_bytes = html.write_pdf(stylesheets=[css])
     else:
