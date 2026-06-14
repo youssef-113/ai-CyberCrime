@@ -1,157 +1,123 @@
 services:
-  # API Gateway / Orchestrator
-  api-gateway:
-    build: ./services/api
+
+  # ══════════════════════════════════════════════════════════════════════════
+  #  Backend API (slim FastAPI) — port 8000
+  # ══════════════════════════════════════════════════════════════════════════
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.api
     ports:
       - "8000:8000"
+    env_file: .env
     environment:
-      - OCR_SERVICE_URL=http://ocr:8001
-      - CLASSIFIER_SERVICE_URL=http://classifier:8002
-      - RAG_SERVICE_URL=http://rag:8003
-      - VERIFICATION_SERVICE_URL=http://verification:8004
-      - PDF_SERVICE_URL=http://pdf-gen:8005
-      - CHATBOT_SERVICE_URL=http://chatbot:8006
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - LLM_API_KEY=${LLM_API_KEY}
-    volumes:
-      - ./outputs:/outputs
-    depends_on:
-      - ocr
-      - classifier
-      - rag
-      - verification
-      - pdf-gen
-
-  # OCR
-  ocr:
-    build: ./services/ocr
-    ports:
-      - "8001:8001"
-    volumes:
-      - ./data:/data
-
-  # Classifier
-  classifier:
-    build: ./services/classifier
-    ports:
-      - "8002:8002"
-    environment:
-      - LLM_API_KEY=${LLM_API_KEY}
-
-  # RAG (Chroma)
-  rag:
-    build: ./services/rag
-    ports:
-      - "8003:8003"
-    environment:
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
-      - CHROMA_COLLECTION=egyptian_law
-      - EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - LLM_MODEL=${LLM_MODEL}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=qwen2.5:3b
-      - OLLAMA_TIMEOUT=180
-      - RERANKER_ENABLED=true
-      - ARTICLES_PATH=/data/law/articles.json
-      - CHUNK_SIZE=800
-      - CHUNK_OVERLAP=50
-      - PARENT_CHUNK_SIZE=1600
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:3b}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - MAX_UPLOAD_SIZE_BYTES=10485760
+      - MAX_UPLOAD_FILES=5
+      - MAX_REQUEST_SIZE_BYTES=10485760
+      - MAX_JSON_PAYLOAD_SIZE=1048576
+      - MAX_OCR_TIMEOUT=30
+      - MAX_OCR_PAGES=20
     volumes:
-      - ./data/law:/data/law
+      - ./outputs:/outputs
+      - ./data:/data
     depends_on:
-      - redis
-      - ollama
-      - chromadb
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    healthcheck:
+      test: [ "CMD", "curl", "-fs", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
 
-  # RAG Worker
-  rag-worker:
-    build: ./services/rag
-    command: ["celery", "-A", "ingestion", "worker", "--loglevel=info"]
+  # ══════════════════════════════════════════════════════════════════════════
+  #  Backend Celery Worker (full ML stack)
+  # ══════════════════════════════════════════════════════════════════════════
+  backend-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    command: >
+      celery -A services.common.celery_app worker --loglevel=info --concurrency=2 -Q ocr,rag,classifier,default --hostname=backend-worker@%h
+    env_file: .env
     environment:
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
-      - CHROMA_COLLECTION=egyptian_law
-      - EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-      - REDIS_URL=redis://redis:6379/0
-      - RERANKER_ENABLED=true
-      - CHUNK_SIZE=800
-      - CHUNK_OVERLAP=50
-      - PARENT_CHUNK_SIZE=1600
-    volumes:
-      - ./data/law:/data/law
-    depends_on:
-      - redis
-      - chromadb
-
-  # Verification
-  verification:
-    build: ./services/verification
-    ports:
-      - "8004:8004"
-    environment:
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - LLM_MODEL=${LLM_MODEL:-llama-3.3-70b-versatile}
-      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.groq.com/openai/v1/chat/completions}
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
-
-  # PDF Generator
-  pdf-gen:
-    build: ./services/pdf_gen
-    ports:
-      - "8005:8005"
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - OLLAMA_BASE_URL=http://ollama:11434
     volumes:
       - ./outputs:/outputs
-
-  # Chatbot
-  chatbot:
-    build: ./services/chatbot
-    ports:
-      - "8006:8006"
-    environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - ./data:/data
     depends_on:
-      - ollama
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
-  # Frontend
+  # ══════════════════════════════════════════════════════════════════════════
+  #  Frontend (React + Vite) — port 3000
+  # ══════════════════════════════════════════════════════════════════════════
   frontend:
     build: ./frontend
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://api-gateway:8000
+      - VITE_API_URL=http://localhost:8000
     depends_on:
-      - api-gateway
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
 
-  # ChromaDB
-  chromadb:
-    image: chromadb/chroma:0.5.23
-    ports:
-      - "8007:8000"
-    volumes:
-      - law_db:/chroma/chroma
+  # ══════════════════════════════════════════════════════════════════════════
+  #  Infrastructure
+  # ══════════════════════════════════════════════════════════════════════════
 
-  # Ollama
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-
-  # Redis
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: [ "CMD", "curl", "-fs", "http://localhost:11434/api/tags" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
 
 volumes:
   redis_data:
   ollama_data:
-  law_db:

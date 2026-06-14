@@ -5,6 +5,7 @@ import { useCases, usePdfDownload } from '../api/hooks'
 import { useTheme } from '../context/ThemeContext'
 import { getTranslation } from '../utils/translations'
 import Button from '../components/ui/Button'
+import Badge from '../components/ui/Badge'
 
 const statusColors = {
   processing: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',

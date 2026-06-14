@@ -249,12 +249,29 @@ function ResultView({ result, onDownload, onReset, downloading }) {
   const crimeInfo = getCrimeTypeInfo(result.classification?.crime_type || 'unknown')
   const verificationStatus = VERIFICATION_STATUS[result.verification?.status] || VERIFICATION_STATUS.NEEDS_USER_REVIEW
 
+  // ── OCR engine display helpers ──────────────────────────────────────────
+  const ENGINE_LABELS = {
+    chandra_ocr2:       { en: 'Chandra OCR 2',         ar: 'Chandra OCR 2 (أساسي)' },
+    paddleocr:          { en: 'PaddleOCR (fallback)',   ar: 'PaddleOCR (بديل)'      },
+    groq_understanding: { en: 'Groq AI (layer 3)',      ar: 'Groq AI (طبقة الفهم)'  },
+    text_file:          { en: 'Text file (direct)',     ar: 'ملف نصي (مباشر)'       },
+    // Legacy labels kept for backward compat with old results
+    easyocr:            { en: 'EasyOCR (legacy)',       ar: 'EasyOCR (قديم)'        },
+    none:               { en: 'None',                   ar: 'لا يوجد'               },
+  }
+  const _engineLabel = (eng) => {
+    const lbl = ENGINE_LABELS[eng] || { en: eng, ar: eng }
+    return language === 'ar' ? lbl.ar : lbl.en
+  }
+
   // Safe helpers for nested OCR data
-  const ocrConf = result.ocr?.avg_confidence ?? result.ocr_confidence ?? 0
-  const ocrPerFile = result.ocr?.per_file || []
-  const ocrEngine = ocrPerFile[0]?.engine || 'easyocr'
-  const ocrLang = ocrPerFile[0]?.language || result.language || 'en'
+  const ocrConf     = result.ocr?.avg_confidence ?? result.ocr_confidence ?? 0
+  const ocrPerFile  = result.ocr?.per_file || []
+  const ocrEngine   = ocrPerFile[0]?.engine || result.ocr?.engine_used || 'chandra_ocr2'
+  const ocrLang     = ocrPerFile[0]?.language || result.language || 'en'
   const ocrFallback = ocrPerFile.some(f => f.fallback_triggered)
+  const ocrGroqUsed = ocrPerFile.some(f => f.engine === 'groq_understanding') ||
+                      result.ocr?.processing_metadata?.groq_entities != null
   const pipelineErrors = result.pipeline_status?.errors || []
   const isPartial = result.pipeline_status?.partial || false
   const stagesCompleted = result.pipeline_status?.stages_completed || []
@@ -355,7 +372,7 @@ function ResultView({ result, onDownload, onReset, downloading }) {
                   <Cpu className="w-4 h-4 text-primary" />
                   <span className="text-sm font-medium text-neutral-300">{language === 'ar' ? 'محرك التعرف' : 'Engine'}</span>
                 </div>
-                <p className="text-sm font-mono">{ocrEngine}</p>
+                <p className="text-sm font-mono">{_engineLabel(ocrEngine)}</p>
               </div>
               <div className="bg-neutral-800/50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -375,9 +392,11 @@ function ResultView({ result, onDownload, onReset, downloading }) {
                   <span className="text-sm font-medium text-neutral-300">{language === 'ar' ? 'محرك بديل' : 'Fallback'}</span>
                 </div>
                 <p className="text-sm font-mono">
-                  {ocrFallback ?
-                    (language === 'ar' ? 'نعم - تم استخدام PaddleOCR' : 'Yes — PaddleOCR used') :
-                    (language === 'ar' ? 'لا - EasyOCR كافي' : 'No — EasyOCR sufficient')
+                  {ocrFallback
+                    ? (ocrGroqUsed
+                        ? (language === 'ar' ? 'نعم — Groq AI (طبقة 3)' : 'Yes — Groq AI (tier 3)')
+                        : (language === 'ar' ? 'نعم — PaddleOCR (طبقة 2)' : 'Yes — PaddleOCR (tier 2)'))
+                    : (language === 'ar' ? 'لا — Chandra OCR 2 كافٍ' : 'No — Chandra OCR 2 sufficient')
                   }
                 </p>
               </div>
@@ -397,7 +416,7 @@ function ResultView({ result, onDownload, onReset, downloading }) {
                     <div key={i} className="flex items-center justify-between bg-neutral-800/30 rounded px-3 py-2 text-sm">
                       <span className="text-neutral-300 truncate">{f.file || `File ${i + 1}`}</span>
                       <div className="flex items-center gap-4 shrink-0">
-                        <span className="font-mono text-neutral-400">{f.engine || '—'}</span>
+                        <span className="font-mono text-neutral-400">{_engineLabel(f.engine) || '—'}</span>
                         <span className={`font-mono ${(f.confidence || 0) >= 0.7 ? 'text-success-light' : (f.confidence || 0) >= 0.5 ? 'text-warning-light' : 'text-danger-light'}`}>
                           {Math.round((f.confidence || 0) * 100)}%
                         </span>

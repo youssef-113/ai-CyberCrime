@@ -1,0 +1,18 @@
+# ACEB Backend - Worker Container (full ML stack)
+# Celery worker needs all the heavy ML packages the API doesn't
+
+# ── Include all API deps ──
+-r requirements-api.txt
+
+# ── RAG: Vector DB + Embeddings ──
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+huggingface-hub>=0.19.0
+
+# ── OCR Engines (lazy-loaded; needed by worker OCR queue) ──
+chandra-ocr>=0.2.0
+paddleocr>=2.7.0
+paddlepaddle>=2.6.0
+
+# ── Verification: LangGraph ──
+langgraph>=0.0.30

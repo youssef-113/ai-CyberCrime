@@ -1,0 +1,61 @@
+# ACEB Backend - Unified Production Requirements
+# Auto-generated from actual imports in backend/services/ and main.py
+
+# ── Web Framework ─────────────────────────────────────────────────────────────
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+python-multipart>=0.0.6
+
+# ── HTTP Client ───────────────────────────────────────────────────────────────
+httpx>=0.25.0
+
+# ── Authentication ─────────────────────────────────────────────────────────────
+PyJWT>=2.8.0
+bcrypt>=4.1.0
+email-validator>=2.1.0
+
+# ── Database ──────────────────────────────────────────────────────────────────
+supabase>=2.4.0
+
+# ── Redis & Caching ───────────────────────────────────────────────────────────
+redis>=5.0.0
+
+# ── Celery (Background Jobs) ──────────────────────────────────────────────────
+celery>=5.3.0
+kombu>=5.3.0
+
+# ── OCR ───────────────────────────────────────────────────────────────────────
+chandra-ocr>=0.2.0
+paddleocr>=2.7.0
+paddlepaddle>=2.6.0
+Pillow>=10.0.0
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+pdf2image>=1.16.0
+
+# ── Arabic Text Processing ────────────────────────────────────────────────────
+arabic-reshaper>=3.0.0
+python-bidi>=0.4.2
+
+# ── RAG & Vector Database ─────────────────────────────────────────────────────
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+huggingface-hub>=0.19.0
+faiss>=1.7.0
+
+# ── PDF Generation ────────────────────────────────────────────────────────────
+weasyprint>=60.0
+jinja2>=3.1.0
+
+# ── Security ──────────────────────────────────────────────────────────────────
+pyclamd>=0.4.0
+
+# ── Rate Limiting ─────────────────────────────────────────────────────────────
+slowapi>=0.1.9
+
+# ── Multi-Agent (Verification) ────────────────────────────────────────────────
+langgraph>=0.2.0
+
+# ── AI / LLM ──────────────────────────────────────────────────────────────────
+google-generativeai>=0.3.0

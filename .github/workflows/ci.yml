@@ -33,7 +33,7 @@ jobs:
       run: |
         pytest tests/ -v --tb=short || echo "Tests may have been skipped"
       env:
-        LLM_API_KEY: ${{ secrets.LLM_API_KEY || 'test-key' }}
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY || 'test-key' }}
         SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'http://localhost:8000' }}
         SUPABASE_KEY: ${{ secrets.SUPABASE_KEY || 'test-key' }}
   

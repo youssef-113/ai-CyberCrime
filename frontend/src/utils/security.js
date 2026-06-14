@@ -33,14 +33,14 @@ const XSS_PATTERNS = [
 
 // SQL injection detection patterns
 const SQL_INJECTION_PATTERNS = [
-  /(?i:)\b(union|select|insert|update|delete|drop|alter|create|truncate)\b/g,
-  /(?i:)\b(or|and)\s+\d+\s*=\s*\d+/g,
-  /(?i:)\b(or|and)\s+['"]\w+['"]\s*=\s*['"]\w+['"]/g,
-  /(?i:)\b(exec|eval|system)\s*\(/g,
-  /(?i:)\b(waitfor\s+delay)\b/g,
-  /(?i:)\b(xp_|sp_)\w+/g,
-  /(?i:);\s*(drop|delete|truncate)\b/g,
-  /(?i:)\b(\-\-|\/\*|\*\/)/g,
+  /\b(union|select|insert|update|delete|drop|alter|create|truncate)\b/gi,
+  /\b(or|and)\s+\d+\s*=\s*\d+/gi,
+  /\b(or|and)\s+['"]\w+['"]\s*=\s*['"]\w+['"]/gi,
+  /\b(exec|eval|system)\s*\(/gi,
+  /\b(waitfor\s+delay)\b/gi,
+  /\b(xp_|sp_)\w+/gi,
+  /;\s*(drop|delete|truncate)\b/gi,
+  /(\-\-|\/\*|\*\/)/g,
 ]
 
 /**
@@ -48,7 +48,10 @@ const SQL_INJECTION_PATTERNS = [
  */
 export function detectPromptInjection(text) {
   if (typeof text !== 'string') return false
-  return PROMPT_INJECTION_PATTERNS.some(pattern => pattern.test(text))
+  return PROMPT_INJECTION_PATTERNS.some(pattern => {
+    pattern.lastIndex = 0
+    return pattern.test(text)
+  })
 }
 
 /**
@@ -56,7 +59,10 @@ export function detectPromptInjection(text) {
  */
 export function detectXSS(value) {
   if (typeof value !== 'string') return false
-  return XSS_PATTERNS.some(pattern => pattern.test(value))
+  return XSS_PATTERNS.some(pattern => {
+    pattern.lastIndex = 0
+    return pattern.test(value)
+  })
 }
 
 /**
@@ -64,7 +70,10 @@ export function detectXSS(value) {
  */
 export function detectSQLInjection(value) {
   if (typeof value !== 'string') return false
-  return SQL_INJECTION_PATTERNS.some(pattern => pattern.test(value))
+  return SQL_INJECTION_PATTERNS.some(pattern => {
+    pattern.lastIndex = 0
+    return pattern.test(value)
+  })
 }
 
 /**

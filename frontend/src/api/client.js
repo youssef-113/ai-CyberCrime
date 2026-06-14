@@ -1,7 +1,13 @@
 import axios from 'axios'
 import { sanitizeAPIRequest, validateInput } from '../utils/security'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+// VITE_API_URL points at the monolith host (e.g. http://localhost:8000).
+// All frontend traffic is routed through the API gateway, which is mounted
+// at /api on the monolith and is the only layer that enforces auth + persists
+// to the database. Sub-app mounts (/chat, /ocr, /rag, ...) bypass that layer,
+// so the client must always target /api.
+const RAW_API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '')
+const API_BASE_URL = RAW_API_URL.endsWith('/api') ? RAW_API_URL : `${RAW_API_URL}/api`
 
 const client = axios.create({
   baseURL: API_BASE_URL,

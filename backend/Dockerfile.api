@@ -1,0 +1,44 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# ── System Dependencies (minimum required at import time) ──
+# OpenCV (needed by preprocessing.py at import time)
+# PDF generation (weasyprint needs pango/cairo)
+# Health check
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    fonts-dejavu-core \
+    fonts-noto-core \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libpangocairo-1.0-0 \
+    libcairo2 \
+    libgdk-pixbuf-xlib-2.0-0 \
+    libffi-dev \
+    shared-mime-info \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Python Dependencies (slim — no ML frameworks) ──
+COPY requirements-api.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements-api.txt
+
+# ── Application Code ──
+COPY . .
+
+# ── Expose Port ──
+EXPOSE 8000
+
+# ── Health Check ──
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -fs http://localhost:8000/health || exit 1
+
+# ── Run Application ──
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

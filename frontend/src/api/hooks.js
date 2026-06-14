@@ -400,6 +400,89 @@ export function useOcrEngines() {
   return { status, checkStatus, loading, error }
 }
 
+/**
+ * useOcrJob — upload a file as an async Celery job, then poll until done.
+ *
+ * Usage:
+ *   const { submit, jobId, status, result, error, loading } = useOcrJob()
+ *   await submit(file)          // enqueues job
+ *   // status auto-polls every 2s until SUCCESS / FAILURE
+ */
+export function useOcrJob() {
+  const [loading,  setLoading]  = useState(false)
+  const [jobId,    setJobId]    = useState(null)
+  const [status,   setStatus]   = useState(null)   // PENDING|STARTED|SUCCESS|FAILURE
+  const [result,   setResult]   = useState(null)
+  const [error,    setError]    = useState(null)
+  const pollRef = useRef(null)
+
+  const _stopPoll = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }
+
+  const submit = useCallback(async (file) => {
+    setLoading(true)
+    setError(null)
+    setResult(null)
+    setStatus('PENDING')
+    _stopPoll()
+
+    try {
+      const { job_id } = await endpoints.uploadOcrJob(file)
+      setJobId(job_id)
+
+      // Poll every 2 s
+      pollRef.current = setInterval(async () => {
+        try {
+          const statusData = await endpoints.getOcrJobStatus(job_id)
+          setStatus(statusData.status)
+
+          if (statusData.status === 'SUCCESS') {
+            _stopPoll()
+            const resultData = await endpoints.getOcrJobResult(job_id)
+            setResult(resultData.result)
+            setLoading(false)
+          } else if (statusData.status === 'FAILURE') {
+            _stopPoll()
+            setError(statusData.message || 'OCR job failed')
+            setLoading(false)
+          }
+        } catch (pollErr) {
+          _stopPoll()
+          setError(pollErr.message || 'Polling failed')
+          setLoading(false)
+        }
+      }, 2000)
+
+    } catch (err) {
+      const message = err.response?.data?.detail || err.message || 'Failed to enqueue OCR job'
+      setError(message)
+      setLoading(false)
+    }
+  }, [])
+
+  const retry = useCallback(async () => {
+    if (!jobId) return
+    try {
+      const data = await endpoints.retryOcrJob(jobId)
+      setJobId(data.job_id)
+      setStatus('PENDING')
+      setError(null)
+      setResult(null)
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message || 'Retry failed')
+    }
+  }, [jobId])
+
+  // Cleanup on unmount
+  useEffect(() => () => _stopPoll(), [])
+
+  return { submit, retry, jobId, status, result, error, loading }
+}
+
 export function useClassification() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -464,34 +547,4 @@ export function useVerification() {
   }, [])
 
   return { verify, loading, error }
-}
-
-export function usePdfGeneration() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-
-  const generate = useCallback(async (caseData) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const blob = await endpoints.generatePdf(caseData)
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `complaint_${caseData.case_id}.pdf`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-      return blob
-    } catch (err) {
-      const message = err.response?.data?.detail || err.message || 'PDF generation failed'
-      setError(message)
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  return { generate, loading, error }
 }

@@ -64,10 +64,8 @@ export const authApi = {
     return response.data
   },
 
-  listSessions: async (limit = 10, offset = 0) => {
-    const response = await client.get(`/sessions/list`, {
-      params: { limit, offset },
-    })
+  listSessions: async () => {
+    const response = await client.get(`/sessions/list`)
     return response.data
   },
 

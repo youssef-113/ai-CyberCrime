@@ -1,0 +1,315 @@
+backend/services/api/main.py:from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, Depends, Query, Request, Response
+backend/services/api/main.py:from fastapi.middleware.cors import CORSMiddleware
+backend/services/api/main.py:from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+backend/services/api/main.py:from fastapi.middleware.trustedhost import TrustedHostMiddleware
+backend/services/api/main.py:from pydantic import BaseModel, validator
+backend/services/api/main.py:from typing import Any, Dict, List, Optional
+backend/services/api/main.py:import httpx
+backend/services/api/main.py:import uuid
+backend/services/api/main.py:import os
+backend/services/api/main.py:import json
+backend/services/api/main.py:import logging
+backend/services/api/main.py:import asyncio
+backend/services/api/main.py:from datetime import datetime, timezone
+backend/services/api/main.py:from slowapi import Limiter
+backend/services/api/main.py:from slowapi.util import get_remote_address
+backend/services/api/main.py:from slowapi.errors import RateLimitExceeded
+backend/services/api/main.py:from services.common.logging import configure_structured_logging, set_request_context, clear_request_context
+backend/services/api/main.py:from services.security.security import (
+backend/services/api/main.py:from services.auth.auth import (
+backend/services/api/main.py:from services.database.database import (
+backend/services/api/main.py:from services.auth.middleware import get_current_user, get_current_user_id, get_session_tenant, require_session, get_optional_user
+backend/services/api/main.py:from .resilience import retry_with_backoff, get_retry_config_for_service, ServiceCallError
+backend/services/api/main.py:from .pipeline import check_service_health
+backend/services/api/main.py:from services.common.llm_client import get_llm_status
+backend/services/api/models.py:from pydantic import BaseModel
+backend/services/api/models.py:from typing import List, Optional, Dict
+backend/services/api/models.py:from datetime import datetime
+backend/services/api/pipeline.py:import httpx
+backend/services/api/pipeline.py:from typing import List, Dict
+backend/services/api/pipeline.py:import asyncio
+backend/services/api/pipeline.py:import logging
+backend/services/api/resilience.py:import asyncio
+backend/services/api/resilience.py:import logging
+backend/services/api/resilience.py:import time
+backend/services/api/resilience.py:from typing import Callable, Any, Optional, TypeVar, Awaitable
+backend/services/api/resilience.py:from enum import Enum
+backend/services/api/tasks.py:import logging
+backend/services/api/tasks.py:from typing import Dict, Any, Optional
+backend/services/api/tasks.py:from celery import Task
+backend/services/api/tasks.py:from services.common.celery_app import celery_app
+backend/services/api/__init__.py:from .main import app
+backend/services/auth/auth.py:import os
+backend/services/auth/auth.py:import re
+backend/services/auth/auth.py:import uuid
+backend/services/auth/auth.py:import logging
+backend/services/auth/auth.py:from datetime import datetime, timedelta, timezone
+backend/services/auth/auth.py:from typing import Dict, Optional
+backend/services/auth/auth.py:import bcrypt
+backend/services/auth/auth.py:import jwt
+backend/services/auth/auth.py:from pydantic import BaseModel, EmailStr, field_validator
+backend/services/auth/auth.py:from fastapi import HTTPException, status
+backend/services/auth/middleware.py:import os
+backend/services/auth/middleware.py:import logging
+backend/services/auth/middleware.py:from fastapi import Depends, HTTPException, status, Request
+backend/services/auth/middleware.py:from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+backend/services/auth/middleware.py:from .auth import decode_token
+backend/services/auth/middleware.py:from services.database.database import get_user_by_id
+backend/services/auth/middleware.py:from .auth import UserResponse
+backend/services/chat/main.py:import os
+backend/services/chat/main.py:import sys
+backend/services/chat/main.py:import re
+backend/services/chat/main.py:import json
+backend/services/chat/main.py:import time
+backend/services/chat/main.py:import logging
+backend/services/chat/main.py:from typing import List, Optional, Dict, Any
+backend/services/chat/main.py:from datetime import datetime
+backend/services/chat/main.py:from fastapi import FastAPI, HTTPException
+backend/services/chat/main.py:from pydantic import BaseModel
+backend/services/chat/__init__.py:from .main import app
+backend/services/classifier/arabic_utils.py:import re
+backend/services/classifier/article_mapping.py:from typing import List, Dict
+backend/services/classifier/main.py:from fastapi import FastAPI
+backend/services/classifier/main.py:from fastapi.middleware.cors import CORSMiddleware
+backend/services/classifier/main.py:from pydantic import BaseModel
+backend/services/classifier/main.py:from typing import Optional
+backend/services/classifier/main.py:import httpx
+backend/services/classifier/main.py:import os
+backend/services/classifier/main.py:import json
+backend/services/classifier/main.py:import re
+backend/services/classifier/main.py:from .prompts import CLASSIFICATION_PROMPT
+backend/services/classifier/main.py:from .models import ClassificationOutput
+backend/services/classifier/main.py:from .crime_definitions import CRIME_DEFINITIONS
+backend/services/classifier/main.py:from .validators import build_validation_notes
+backend/services/classifier/main.py:from .article_mapping import get_suggested_articles
+backend/services/classifier/main.py:from .arabic_utils import normalize_arabic
+backend/services/classifier/main.py:from .metrics_runtime import start_timer, record_classification, get_runtime_metrics
+backend/services/classifier/main.py:from services.common.llm_client import llm_request
+backend/services/classifier/metrics.py:from typing import Dict, List
+backend/services/classifier/metrics_runtime.py:import time
+backend/services/classifier/metrics_runtime.py:from typing import Dict
+backend/services/classifier/models.py:from pydantic import BaseModel, Field
+backend/services/classifier/models.py:from typing import List, Literal
+backend/services/classifier/tasks.py:import logging
+backend/services/classifier/tasks.py:import asyncio
+backend/services/classifier/tasks.py:from typing import Dict, Any
+backend/services/classifier/tasks.py:from celery import Task
+backend/services/classifier/tasks.py:from services.common.celery_app import celery_app
+backend/services/classifier/validators.py:from typing import Dict, List
+backend/services/classifier/validators.py:from .crime_definitions import CRIME_DEFINITIONS
+backend/services/classifier/__init__.py:from .main import app
+backend/services/common/cache.py:import os
+backend/services/common/cache.py:import json
+backend/services/common/cache.py:import logging
+backend/services/common/cache.py:from typing import Optional, Any
+backend/services/common/cache.py:from datetime import timedelta
+backend/services/common/celery_app.py:import os
+backend/services/common/celery_app.py:from celery import Celery
+backend/services/common/celery_app.py:from kombu import Queue  # noqa: E402
+backend/services/common/llm_client.py:import os
+backend/services/common/llm_client.py:import json
+backend/services/common/llm_client.py:import asyncio
+backend/services/common/llm_client.py:from typing import Optional
+backend/services/common/llm_client.py:import httpx
+backend/services/common/llm_client.py:from pydantic import BaseModel, ValidationError
+backend/services/common/logging.py:import json
+backend/services/common/logging.py:import logging
+backend/services/common/logging.py:import contextvars
+backend/services/common/logging.py:from datetime import datetime
+backend/services/database/database.py:import os
+backend/services/database/database.py:import json
+backend/services/database/database.py:import logging
+backend/services/database/database.py:from typing import Optional, List, Dict, Any
+backend/services/database/database.py:from datetime import datetime, timezone
+backend/services/database/database.py:from supabase import create_client, Client
+backend/services/database/database.py:from services.auth.auth import (
+backend/services/database/database.py:from fastapi import HTTPException, status
+backend/services/ocr/arabic_utils.py:import re
+backend/services/ocr/arabic_utils.py:import unicodedata
+backend/services/ocr/arabic_utils.py:from typing import Optional
+backend/services/ocr/entities.py:import re
+backend/services/ocr/entities.py:from typing import List, Dict, Tuple, Optional
+backend/services/ocr/entities.py:from dataclasses import dataclass
+backend/services/ocr/entities.py:from .models import ExtractedEntity, EntityCollection
+backend/services/ocr/entities.py:from .arabic_utils import normalize_arabic_text
+backend/services/ocr/main.py:from __future__ import annotations
+backend/services/ocr/main.py:import asyncio
+backend/services/ocr/main.py:import hashlib
+backend/services/ocr/main.py:import logging
+backend/services/ocr/main.py:import os
+backend/services/ocr/main.py:import tempfile
+backend/services/ocr/main.py:import time
+backend/services/ocr/main.py:import uuid
+backend/services/ocr/main.py:from typing import Any, Dict, List, Optional
+backend/services/ocr/main.py:from fastapi import FastAPI, File, HTTPException, UploadFile
+backend/services/ocr/main.py:from fastapi.middleware.cors import CORSMiddleware
+backend/services/ocr/main.py:from pydantic import BaseModel
+backend/services/ocr/main.py:from .arabic_utils import detect_language, normalize_arabic_text
+backend/services/ocr/main.py:from .entities import check_threat_indicators, extract_entities, merge_entities
+backend/services/ocr/main.py:from .models import EvidenceBlock, EntityCollection, OCRResponse
+backend/services/ocr/main.py:from .ocr_engine import (
+backend/services/ocr/models.py:from __future__ import annotations
+backend/services/ocr/models.py:from typing import Any, Dict, List, Optional
+backend/services/ocr/models.py:from pydantic import BaseModel, Field
+backend/services/ocr/ocr_engine.py:from __future__ import annotations
+backend/services/ocr/ocr_engine.py:import hashlib
+backend/services/ocr/ocr_engine.py:import json
+backend/services/ocr/ocr_engine.py:import logging
+backend/services/ocr/ocr_engine.py:import os
+backend/services/ocr/ocr_engine.py:import time
+backend/services/ocr/ocr_engine.py:from dataclasses import dataclass, field
+backend/services/ocr/ocr_engine.py:from typing import Any, Dict, List, Optional, Tuple
+backend/services/ocr/ocr_engine.py:import numpy as np
+backend/services/ocr/ocr_engine.py:from .arabic_utils import detect_language, normalize_arabic_text
+backend/services/ocr/ocr_engine.py:from .models import ConfidenceScore, EvidenceBlock, OCRResult
+backend/services/ocr/ocr_engine.py:from .preprocessing import preprocess_image
+backend/services/ocr/preprocessing.py:import cv2
+backend/services/ocr/preprocessing.py:import numpy as np
+backend/services/ocr/preprocessing.py:from PIL import Image
+backend/services/ocr/preprocessing.py:from typing import Tuple, Optional
+backend/services/ocr/tasks.py:from __future__ import annotations
+backend/services/ocr/tasks.py:import hashlib
+backend/services/ocr/tasks.py:import logging
+backend/services/ocr/tasks.py:import os
+backend/services/ocr/tasks.py:import time
+backend/services/ocr/tasks.py:from typing import Any, Dict, List, Optional
+backend/services/ocr/tasks.py:from celery import Task
+backend/services/ocr/tasks.py:from services.common.celery_app import celery_app
+backend/services/ocr/__init__.py:from .main import app
+backend/services/pdf/generate.py:from weasyprint import HTML, CSS
+backend/services/pdf/generate.py:from jinja2 import Environment, FileSystemLoader
+backend/services/pdf/generate.py:import os
+backend/services/pdf/generate.py:from typing import List
+backend/services/pdf/generate.py:from datetime import datetime
+backend/services/pdf/main.py:import os
+backend/services/pdf/main.py:import base64
+backend/services/pdf/main.py:from typing import List, Optional
+backend/services/pdf/main.py:from datetime import datetime
+backend/services/pdf/main.py:from fastapi import FastAPI, HTTPException
+backend/services/pdf/main.py:from fastapi.middleware.cors import CORSMiddleware
+backend/services/pdf/main.py:from fastapi.responses import Response
+backend/services/pdf/main.py:from pydantic import BaseModel
+backend/services/pdf/main.py:from .generate import generate_complaint_pdf
+backend/services/pdf/__init__.py:from .main import app
+backend/services/rag/build_knowledge_base.py:import json
+backend/services/rag/build_knowledge_base.py:import os
+backend/services/rag/build_knowledge_base.py:import sys
+backend/services/rag/build_knowledge_base.py:import logging
+backend/services/rag/cache.py:import json
+backend/services/rag/cache.py:import hashlib
+backend/services/rag/cache.py:import time
+backend/services/rag/cache.py:import logging
+backend/services/rag/cache.py:import os
+backend/services/rag/cache.py:from typing import Optional, Dict, Any
+backend/services/rag/cache.py:import numpy as np
+backend/services/rag/cache.py:from .config import config
+backend/services/rag/chunker.py:import re
+backend/services/rag/chunker.py:import hashlib
+backend/services/rag/chunker.py:from typing import List, Dict, Optional
+backend/services/rag/chunker.py:from dataclasses import dataclass
+backend/services/rag/chunker.py:from .config import config
+backend/services/rag/citations.py:import logging
+backend/services/rag/citations.py:from typing import List, Dict, Any
+backend/services/rag/citations.py:import chromadb
+backend/services/rag/citations.py:from .config import config
+backend/services/rag/config.py:import os
+backend/services/rag/config.py:from dataclasses import dataclass, field
+backend/services/rag/ingestion.py:import hashlib
+backend/services/rag/ingestion.py:import logging
+backend/services/rag/ingestion.py:from typing import List, Dict, Any
+backend/services/rag/ingestion.py:from .config import config
+backend/services/rag/main.py:import time
+backend/services/rag/main.py:import logging
+backend/services/rag/main.py:from typing import List, Optional, Dict, Any
+backend/services/rag/main.py:from fastapi import FastAPI, HTTPException, BackgroundTasks
+backend/services/rag/main.py:from fastapi.middleware.cors import CORSMiddleware
+backend/services/rag/main.py:from pydantic import BaseModel
+backend/services/rag/main.py:from .config import config
+backend/services/rag/observability.py:import time
+backend/services/rag/observability.py:import logging
+backend/services/rag/observability.py:import json
+backend/services/rag/observability.py:from typing import List, Dict, Any, Optional
+backend/services/rag/observability.py:from dataclasses import dataclass, field
+backend/services/rag/observability.py:from collections import deque
+backend/services/rag/observability.py:from .config import config
+backend/services/rag/parse_law.py:import json
+backend/services/rag/parse_law.py:import re
+backend/services/rag/parse_law.py:import os
+backend/services/rag/parse_law.py:from typing import List, Dict, Optional
+backend/services/rag/query_transform.py:import logging
+backend/services/rag/query_transform.py:from typing import List, Dict, Optional
+backend/services/rag/query_transform.py:import httpx
+backend/services/rag/query_transform.py:from .config import config
+backend/services/rag/reranker.py:import logging
+backend/services/rag/reranker.py:from typing import List, Optional
+backend/services/rag/reranker.py:from .config import config
+backend/services/rag/reranker.py:from .retriever import RetrievalResult
+backend/services/rag/retriever.py:import logging
+backend/services/rag/retriever.py:from typing import List, Dict, Any, Optional
+backend/services/rag/retriever.py:from dataclasses import dataclass
+backend/services/rag/retriever.py:import numpy as np
+backend/services/rag/retriever.py:from .config import config
+backend/services/rag/tasks.py:import logging
+backend/services/rag/tasks.py:from typing import Dict, Any, List
+backend/services/rag/tasks.py:from celery import Task
+backend/services/rag/tasks.py:from services.common.celery_app import celery_app
+backend/services/rag/tasks.py:import asyncio
+backend/services/rag/__init__.py:from .main import app
+backend/services/security/security.py:import os
+backend/services/security/security.py:import re
+backend/services/security/security.py:import html
+backend/services/security/security.py:import json
+backend/services/security/security.py:import hashlib
+backend/services/security/security.py:import time
+backend/services/security/security.py:import secrets
+backend/services/security/security.py:from typing import Any, Optional, Dict, List
+backend/services/security/security.py:from fastapi import HTTPException, UploadFile, Request, Response
+backend/services/security/security.py:from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+backend/services/security/security.py:from functools import wraps
+backend/services/security/security.py:from collections import defaultdict
+backend/services/security/security.py:from datetime import datetime, timedelta
+backend/services/security/security.py:import ipaddress
+backend/services/verification/agents.py:import json
+backend/services/verification/agents.py:import re
+backend/services/verification/agents.py:import time
+backend/services/verification/agents.py:import httpx
+backend/services/verification/agents.py:import os
+backend/services/verification/agents.py:from typing import List, Optional
+backend/services/verification/agents.py:from .strategies import get_strategy
+backend/services/verification/agents.py:from .timeline import build_validated_timeline, timeline_summary
+backend/services/verification/agents.py:from services.common.llm_client import llm_request
+backend/services/verification/database.py:import json
+backend/services/verification/database.py:import os
+backend/services/verification/database.py:import sqlite3
+backend/services/verification/database.py:from datetime import datetime, timezone
+backend/services/verification/database.py:from typing import Dict, List, Optional
+backend/services/verification/graph.py:import time
+backend/services/verification/graph.py:from typing import List, Optional, TypedDict
+backend/services/verification/graph.py:from langgraph.graph import StateGraph, END
+backend/services/verification/graph.py:from .agents import attacker_agent, judge_agent
+backend/services/verification/graph.py:from .database import VerificationStore
+backend/services/verification/graph.py:from .scoring import calculate_score
+backend/services/verification/graph.py:from .timeline import build_validated_timeline
+backend/services/verification/main.py:import uuid
+backend/services/verification/main.py:from typing import List, Optional
+backend/services/verification/main.py:from fastapi import FastAPI, HTTPException
+backend/services/verification/main.py:from fastapi.middleware.cors import CORSMiddleware
+backend/services/verification/main.py:from pydantic import BaseModel
+backend/services/verification/main.py:from .graph import run_verification_graph
+backend/services/verification/main.py:from .supabase_store import SupabaseVerificationStore
+backend/services/verification/main.py:from .database import VerificationStore as SQLiteStore
+backend/services/verification/main.py:import os as _os
+backend/services/verification/scoring.py:from typing import Dict, Optional, Tuple
+backend/services/verification/strategies.py:from abc import ABC, abstractmethod
+backend/services/verification/strategies.py:import re
+backend/services/verification/strategies.py:from typing import List, Optional
+backend/services/verification/supabase_store.py:import json
+backend/services/verification/supabase_store.py:import logging
+backend/services/verification/supabase_store.py:import os
+backend/services/verification/supabase_store.py:from datetime import datetime, timezone
+backend/services/verification/supabase_store.py:from typing import Dict, List, Optional
+backend/services/verification/supabase_store.py:from .database import VerificationStore as SQLiteStore
+backend/services/verification/timeline.py:from datetime import datetime
+backend/services/verification/timeline.py:from typing import List, Dict, Optional, Tuple
+backend/services/verification/timeline.py:import re
+backend/services/verification/__init__.py:from .main import app
