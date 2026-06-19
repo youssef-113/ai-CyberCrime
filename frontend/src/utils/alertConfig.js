@@ -151,7 +151,7 @@ export function getAlertConfig(type = 'info') {
     color: '#FFFFFF',
     confirmButtonColor: ALERT_COLORS.primary,
     cancelButtonColor: ALERT_COLORS.neutral900,
-    allowOutsideClick: false,
+    allowOutsideClick: true,
     allowEscapeKey: true,
     customClass: {
       popup: 'alert-popup',
@@ -213,6 +213,8 @@ export async function showError(title, message = '', options = {}) {
     ...getAlertConfig('error'),
     title: title || 'Error!',
     html: errorMsg,
+    timer: options.timer || 4000,
+    timerProgressBar: true,
     ...options,
   })
 }

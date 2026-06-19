@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Eye, EyeOff, ArrowRight, ArrowLeft, Check, X, Zap } from 'lucide-react'
@@ -8,7 +8,8 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { getTranslation } from '../utils/translations'
 import { validatePasswordStrength } from '../utils/validators'
-import { showError } from '../utils/alertConfig'
+import { showError, closeAlert } from '../utils/alertConfig'
+import Swal from 'sweetalert2'
 
 const PASSWORD_RULES = [
   { key: 'length', label: 'At least 8 characters', test: (p) => p.length >= 8 },
@@ -29,6 +30,13 @@ export default function SignupPage() {
   const navigate = useNavigate()
 
   const t = (key) => getTranslation(language, key)
+
+  // Force-clean any leftover SweetAlert overlays on mount
+  useEffect(() => {
+    Swal.close()
+    closeAlert()
+    document.querySelectorAll('.swal2-container, .swal2-backdrop-show').forEach(el => el.remove())
+  }, [])
 
   const passwordValidation = useMemo(() => {
     return validatePasswordStrength(password)

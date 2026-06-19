@@ -10,6 +10,14 @@ from typing import Optional, List, Dict, Any
 import os
 import logging
 
+# Load .env file at startup so env vars are available even if docker-compose
+# does not pass them (belt-and-suspenders with the docker-compose env_file).
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+except Exception:
+    pass
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("aceb.backend")

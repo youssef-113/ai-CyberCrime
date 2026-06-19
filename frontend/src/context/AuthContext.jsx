@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { authApi } from '../api/auth'
-import { ActionAlerts, mapErrorMessage, closeAlert } from '../utils/alertConfig'
+import { ActionAlerts, mapErrorMessage, closeAlert, showToast } from '../utils/alertConfig'
 import Swal from 'sweetalert2'
 
 const AuthContext = createContext(null)
@@ -143,7 +143,7 @@ export function AuthProvider({ children }) {
       } catch (err) {
         const message = mapErrorMessage(err)
         setError(message)
-        ActionAlerts.authError(err)
+        showToast('error', 'Authentication Failed', message)
         throw err
       } finally {
         setLoading(false)
@@ -177,7 +177,7 @@ export function AuthProvider({ children }) {
       } catch (err) {
         const message = mapErrorMessage(err)
         setError(message)
-        ActionAlerts.authError(err)
+        showToast('error', 'Authentication Failed', message)
         throw err
       } finally {
         setLoading(false)

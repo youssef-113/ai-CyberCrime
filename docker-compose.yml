@@ -31,10 +31,14 @@ services:
     volumes:
       - ./outputs:/outputs
       - ./data:/data
+      - ./backend:/app
+      - ./.env:/app/.env
     depends_on:
       redis:
         condition: service_healthy
       ollama:
+        condition: service_started
+      chromadb:
         condition: service_started
     healthcheck:
       test: [ "CMD", "curl", "-fs", "http://localhost:8000/health" ]
@@ -69,6 +73,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      chromadb:
+        condition: service_started
     restart: unless-stopped
 
   # ══════════════════════════════════════════════════════════════════════════
@@ -76,6 +82,8 @@ services:
   # ══════════════════════════════════════════════════════════════════════════
   frontend:
     build: ./frontend
+    volumes:
+      - ./frontend:/app
     ports:
       - "3000:3000"
     environment:
@@ -104,6 +112,13 @@ services:
       start_period: 5s
     restart: unless-stopped
 
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: chromadb
+    ports:
+      - "8001:8000"
+    restart: unless-stopped
+
   ollama:
     image: ollama/ollama:latest
     ports:
@@ -121,3 +136,4 @@ services:
 volumes:
   redis_data:
   ollama_data:
+
