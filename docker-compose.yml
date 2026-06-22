@@ -32,7 +32,6 @@ services:
       - ./outputs:/outputs
       - ./data:/data
       - ./backend:/app
-      - ./.env:/app/.env
     depends_on:
       redis:
         condition: service_healthy

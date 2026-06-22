@@ -1,0 +1,49 @@
+# CI variant — uses pre-built images from prior jobs
+# Used only in GitHub Actions CI pipeline
+
+services:
+  backend:
+    image: aceb-backend:ci
+    ports:
+      - "8000:8000"
+    environment:
+      - SUPABASE_URL=http://localhost:8000
+      - SUPABASE_KEY=test-key
+      - SUPABASE_SERVICE_KEY=test-key
+      - GROQ_API_KEY=test-key
+      - JWT_SECRET_KEY=ci-test-secret-key-do-not-use-in-prod
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - CORS_ORIGINS=http://localhost:3000
+      - AUTH_DISABLED=true
+      - LOG_LEVEL=WARNING
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    image: aceb-frontend:ci
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
