@@ -34,7 +34,7 @@ test_endpoint("Main health", "GET", f"{BASE}/health")
 test_endpoint("API root", "GET", f"{BASE}/api/")
 test_endpoint("API health", "GET", f"{BASE}/api/health")
 test_endpoint("API aggregate health", "GET", f"{BASE}/api/health/aggregate")
-test_endpoint("API ready", "GET", f"{BASE}/api/ready", 503)
+test_endpoint("API ready", "GET", f"{BASE}/api/ready", 200)
 test_endpoint("API metrics", "GET", f"{BASE}/api/metrics")
 
 print("\n-- 2. Sub-service Health --")

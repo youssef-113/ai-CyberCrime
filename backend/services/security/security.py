@@ -5,7 +5,10 @@ import json
 import hashlib
 import time
 import secrets
+import logging
 from typing import Any, Optional, Dict, List
+
+logger = logging.getLogger("aceb.security")
 from fastapi import HTTPException, UploadFile, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from functools import wraps
