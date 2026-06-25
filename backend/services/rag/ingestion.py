@@ -32,18 +32,15 @@ def _get_embedding_model():
 
 
 def _get_chroma():
-    """Lazy ChromaDB HTTP client."""
+    """Lazy ChromaDB cloud client."""
     global _chroma_client
     if _chroma_client is None:
         import chromadb
 
-        host = getattr(config, "chroma", None)
-        chroma_host = getattr(host, "host", "chromadb") if host else "chromadb"
-        chroma_port = getattr(host, "port", 8000) if host else 8000
-
-        _chroma_client = chromadb.HttpClient(
-            host=chroma_host,
-            port=chroma_port,
+        _chroma_client = chromadb.CloudClient(
+            api_key=config.chroma.api_key,
+            tenant=config.chroma.cloud_tenant,
+            database=config.chroma.cloud_database,
         )
 
     return _chroma_client

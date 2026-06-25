@@ -973,8 +973,8 @@ async def verify_evidence(
                 "evidence_blocks": sanitized_request["evidence_blocks"],
                 "case_id": verification_case_id,
                 "user_id": user_id,
-                "source_case_id": request.case_id,
-                "session_id": request.session_id,
+                "source_case_id": body.case_id,
+                "session_id": body.session_id,
             },
             timeout=90.0,
         )

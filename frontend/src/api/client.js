@@ -6,7 +6,24 @@ import { sanitizeAPIRequest, validateInput } from '../utils/security'
 // at /api on the monolith and is the only layer that enforces auth + persists
 // to the database. Sub-app mounts (/chat, /ocr, /rag, ...) bypass that layer,
 // so the client must always target /api.
-const RAW_API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '')
+function resolveApiUrl() {
+  const configured = import.meta.env.VITE_API_URL
+  if (configured) return configured.replace(/\/+$/, '')
+
+  // In production (Vercel), try to reach the backend at the same origin + /api
+  // or fall back to the hardcoded dev default
+  if (import.meta.env.PROD) {
+    const origin = window.location.origin
+    const hostname = window.location.hostname
+    // If deployed on Vercel, use relative path (backend proxied on same domain)
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return origin
+    }
+  }
+  return 'http://localhost:8000'
+}
+
+const RAW_API_URL = resolveApiUrl()
 const API_BASE_URL = RAW_API_URL.endsWith('/api') ? RAW_API_URL : `${RAW_API_URL}/api`
 
 const client = axios.create({

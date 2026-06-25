@@ -3,7 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import Header from './Header'
 import Sidebar from './Sidebar'
 import Scene3D from '../Scene3D'
-import clsx from 'clsx'
+import Scene3DWrapper from '../Scene3DWrapper'
 
 export default function MainLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -15,7 +15,7 @@ export default function MainLayout() {
   if (isAuthPage) {
     return (
       <div className="min-h-screen relative">
-        <Scene3D />
+        <Scene3DWrapper><Scene3D /></Scene3DWrapper>
         <div className="relative z-10">
           <Header onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
           <main>
@@ -29,7 +29,7 @@ export default function MainLayout() {
   if (isLanding) {
     return (
       <div className="min-h-screen relative">
-        <Scene3D />
+        <Scene3DWrapper><Scene3D /></Scene3DWrapper>
         <div className="relative z-10">
           <Header onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
           <main>
@@ -42,7 +42,7 @@ export default function MainLayout() {
 
   return (
     <div className="min-h-screen flex flex-col relative">
-      <Scene3D />
+      <Scene3DWrapper><Scene3D /></Scene3DWrapper>
       <div className="relative z-10 flex flex-col min-h-screen">
         <Header onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
         <div className="flex flex-1 overflow-hidden">

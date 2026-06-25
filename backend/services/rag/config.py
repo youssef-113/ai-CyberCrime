@@ -5,8 +5,9 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ChromaConfig:
-    host: str = os.getenv("CHROMA_HOST", "chromadb")
-    port: int = int(os.getenv("CHROMA_PORT", "8000"))
+    api_key: str = os.getenv("CHROMA_API_KEY", "")
+    cloud_tenant: str = os.getenv("CHROMA_CLOUD_TENANT", "")
+    cloud_database: str = os.getenv("CHROMA_CLOUD_DATABASE", "egyptian_law")
     collection_name: str = os.getenv("CHROMA_COLLECTION", "egyptian_law")
 
 

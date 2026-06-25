@@ -1,0 +1,147 @@
+# Cybercrime AI - Environment Variables
+# Copy this file to .env and fill in your actual values
+
+# ============================================
+# REQUIRED: LLM API Configuration
+# ============================================
+# Primary: Ollama (local, free, no API key needed)
+# Model: qwen2.5:3b - lightweight multilingual model, good for Arabic/English legal queries
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:3b
+OLLAMA_TIMEOUT=60
+OLLAMA_TEMPERATURE=0.3
+OLLAMA_MAX_TOKENS=300
+LLM_PROVIDER=ollama
+
+
+GROQ_API_URL=https://api.groq.com/openai/v1/chat/completions
+GROQ_API_KEY= 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
+GROQ_MODEL=llama-3.1-8b-instant
+GROQ_TIMEOUT=20
+
+# Fallback: Second Groq API key (for rate limit handling)
+# Use a different Groq API key here
+FALLBACK_API_URL=https://api.groq.com/openai/v1/chat/completions
+FALLBACK_API_KEY=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
+FALLBACK_MODEL=llama-3.1-8b-instant
+# ============================================
+# Supabase PostgreSQL Configuration
+# ============================================
+# Get these from: https://supabase.com/dashboard → Project Settings → API
+SUPABASE_URL=https://ksvntvhuoeexmhwmydsb.supabase.co
+SUPABASE_KEY=sb_publishable_JdyQDaEDgilTZF1hciXb-w_JC7X1_xt
+SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtzdm50dmh1b2VleG1od215ZHNiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzEzODc0NSwiZXhwIjoyMDkyNzE0NzQ1fQ.LCltFEETtdM1SqiDCcBKc_EHAz3HJJTL9ewkqbp87lY
+
+# ============================================
+# JWT Authentication Configuration
+# ============================================
+# Generate a strong secret: python -c "import secrets; print(secrets.token_urlsafe(64))"
+JWT_SECRET_KEY=xwoE5GHKchMqeF2X8U8rtZkQEU0AcvE8wBru3UrGFPsTTYNq4xtQbe95BVbzxpxNKGLOHT2ZkzGmrngUO-F_fQ
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# Set to "true" to disable auth (development only)
+AUTH_DISABLED=false
+
+# ============================================
+# CORS Configuration
+# ============================================
+CORS_ORIGIN=http://localhost:3000
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+
+# ============================================
+# Service URLs (Docker internal networking)
+# These are used by docker-compose
+# ============================================
+# Monolith deployment: the gateway proxies to in-process sub-app mounts on the
+# `backend` container. The celery worker (separate container) reaches them via
+# the same `backend` service host on the docker network.
+OCR_SERVICE_URL=http://backend:8000/ocr
+CLASSIFIER_SERVICE_URL=http://backend:8000/classifier
+RAG_SERVICE_URL=http://backend:8000/rag
+VERIFICATION_SERVICE_URL=http://backend:8000/verification
+PDF_SERVICE_URL=http://backend:8000/pdf
+CHATBOT_SERVICE_URL=http://backend:8000/chat
+
+# ============================================
+# Frontend Configuration
+# ============================================
+VITE_API_URL=http://localhost:8000
+
+# ============================================
+# Vector Database (Qdrant - Production)
+# ============================================
+QDRANT_HOST=qdrant
+QDRANT_PORT=6333
+QDRANT_COLLECTION=egyptian_law
+VECTOR_SIZE=384
+
+# ============================================
+# Redis (Semantic Cache + Celery Broker)
+# ============================================
+
+REDIS_URL=redis://redis:6379/0
+CELERY_BROKER_URL=redis://redis:6379/1
+CELERY_RESULT_BACKEND=redis://redis:6379/2
+REDIS_TTL=3600
+# ============================================
+# RAG Pipeline Configuration
+# ============================================
+CHUNK_SIZE=512
+CHUNK_OVERLAP=200
+PARENT_CHUNK_SIZE=1024
+EMBEDDING_MODEL=all-MiniLM-L6-v2
+RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
+RERANKER_ENABLED=true
+SEMANTIC_CACHE_ENABLED=true
+SEMANTIC_CACHE_THRESHOLD=0.92
+SEMANTIC_CACHE_TTL=3600
+MULTI_TENANT_ENABLED=true
+HYDE_ENABLED=true
+RAG_FUSION_ENABLED=true
+STEP_BACK_ENABLED=false
+RAG_FUSION_QUERIES=3
+RETRIEVER_TOP_K=20
+BM25_WEIGHT=0.3
+VECTOR_WEIGHT=0.7
+MIN_VECTOR_SIMILARITY=0.5
+OBSERVABILITY_ENABLED=true
+FAITHFULNESS_THRESHOLD=0.7
+
+# ============================================
+# Development Settings
+# ============================================
+DEBUG=false
+LOG_LEVEL=INFO
+
+
+# OCR Security
+MAX_OCR_TIMEOUT=30  # seconds
+MAX_OCR_PAGES=20    # max pages
+
+# File Upload Security
+MAX_UPLOAD_SIZE_BYTES=10485760  # 10MB
+MAX_UPLOAD_FILES=5
+
+
+CHANDRA_CONFIDENCE_THRESHOLD=0.85
+PADDLE_CONFIDENCE_THRESHOLD=0.80
+# Security limits
+MAX_FILE_SIZE_BYTES=10485760     # 10 MB
+MAX_IMAGE_DIMENSION=8000         # pixels (longest side)
+MAX_PDF_PAGES=20
+OCR_TIMEOUT=30                   # seconds before aborting OCR
+MAX_BATCH_FILES=10
+# Redis caching for OCR results
+OCR_CACHE_ENABLED=true
+OCR_CACHE_TTL=3600               # seconds
+
+# ── Vector DB (ChromaDB) ─────────────────────────────────────
+CHROMA_HOST=chromadb
+CHROMA_PORT=8000
+CHROMA_COLLECTION=egyptian_law
+
+
+DEBUG=false
+LOG_LEVEL=INFO
+LLM_MODEL=llama-3.3-70b-versatile

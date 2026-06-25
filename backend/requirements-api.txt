@@ -49,6 +49,10 @@ slowapi>=0.1.9
 # ── Multi-Agent (Verification) ──
 langgraph>=0.2.0
 
+# ── RAG (mounted in-process in the monolith: Chroma Cloud client + query embeddings) ──
+chromadb>=0.5.23
+sentence-transformers>=2.2.0
+
 # ── Logging & Monitoring ──
 python-json-logger>=2.0.0
 structlog>=24.0.0

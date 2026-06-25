@@ -19,9 +19,10 @@ def _get_chroma():
 
     if _chroma_client is None:
         import chromadb
-        _chroma_client = chromadb.HttpClient(
-            host=config.chroma.host,
-            port=config.chroma.port,
+        _chroma_client = chromadb.CloudClient(
+            api_key=config.chroma.api_key,
+            tenant=config.chroma.cloud_tenant,
+            database=config.chroma.cloud_database,
         )
 
     return _chroma_client
@@ -253,9 +254,9 @@ def retrieve_and_validate(
 
 def get_retriever_stats() -> Dict[str, Any]:
     stats = {
-        "vector_db": "chromadb",
-        "host": config.chroma.host,
-        "port": config.chroma.port,
+        "vector_db": "chromadb_cloud",
+        "cloud_tenant": config.chroma.cloud_tenant,
+        "cloud_database": config.chroma.cloud_database,
         "collection": config.chroma.collection_name,
     }
 

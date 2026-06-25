@@ -9,10 +9,11 @@ logger = logging.getLogger("rag.citations")
 
 
 def _get_chroma_client():
-    """Get ChromaDB client instance."""
-    return chromadb.HttpClient(
-        host=config.chroma.host,
-        port=config.chroma.port,
+    """Get ChromaDB cloud client instance."""
+    return chromadb.CloudClient(
+        api_key=config.chroma.api_key,
+        tenant=config.chroma.cloud_tenant,
+        database=config.chroma.cloud_database,
     )
 
 

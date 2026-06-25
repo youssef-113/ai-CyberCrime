@@ -84,17 +84,33 @@ app.add_middleware(
 _ocr_engine: Optional[OCREngine] = None
 
 
+def _ensure_engine() -> OCREngine:
+    """Lazily build the OCR engine singleton.
+
+    The OCR app is mounted as a sub-application (backend/main.py), and Starlette
+    does not propagate the parent's startup event to mounted sub-apps, so the
+    `@app.on_event("startup")` hook never fires under the monolith. Initialise on
+    first use instead so `/ocr/extract` works regardless of how the app is run.
+    """
+    global _ocr_engine
+    if _ocr_engine is None:
+        config = OCRConfig(
+            chandra_confidence_threshold=0.85,
+            paddle_confidence_threshold=0.80,
+            use_preprocessing=True,
+            target_width=800,
+            use_groq_layer=True,
+        )
+        _ocr_engine = get_ocr_engine(config)
+        logger.info("OCR engine initialised (lazy)")
+    return _ocr_engine
+
+
 @app.on_event("startup")
 async def startup_event() -> None:
-    global _ocr_engine
-    config = OCRConfig(
-        chandra_confidence_threshold=0.85,
-        paddle_confidence_threshold=0.80,
-        use_preprocessing=True,
-        target_width=800,
-        use_groq_layer=True,
-    )
-    _ocr_engine = get_ocr_engine(config)
+    # Still attempt eager init when run as a standalone app; harmless (no-op
+    # propagation) when mounted, where _ensure_engine() covers it.
+    _ensure_engine()
     logger.info("OCR service started — engine initialised")
 
 
@@ -140,8 +156,7 @@ async def _ocr_process(content: bytes, filename: str, block_id: str = "E001") ->
     5. Cache result
     6. Return structured OCRResponse
     """
-    if _ocr_engine is None:
-        raise HTTPException(status_code=503, detail="OCR engine not initialised")
+    _ensure_engine()
 
     mime = _validate_file(content, filename)
     start = time.perf_counter()

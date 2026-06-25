@@ -158,9 +158,9 @@ def get_stats():
 
     return {
         "config": {
-            "vector_db": "chromadb",
-            "chroma_host": config.chroma.host,
-            "chroma_port": config.chroma.port,
+            "vector_db": "chromadb_cloud",
+            "chroma_cloud_tenant": config.chroma.cloud_tenant,
+            "chroma_cloud_database": config.chroma.cloud_database,
             "chroma_collection": config.chroma.collection_name,
             "embedding_model": config.embedding.model_name,
             "chunk_size": config.chunking.chunk_size,
@@ -504,8 +504,8 @@ async def validate_citations_endpoint(request: ValidateCitationsRequest):
 @app.on_event("startup")
 async def startup():
     logger.info("RAG Service v2.0 starting...")
-    logger.info(f"  Vector DB: ChromaDB")
-    logger.info(f"  Chroma: {config.chroma.collection_name} @ {config.chroma.host}:{config.chroma.port}")
+    logger.info(f"  Vector DB: ChromaDB Cloud")
+    logger.info(f"  Chroma: {config.chroma.collection_name} @ tenant={config.chroma.cloud_tenant} db={config.chroma.cloud_database}")
     logger.info(f"  Embedding model: {config.embedding.model_name}")
     logger.info(f"  Chunk size: {config.chunking.chunk_size} tokens, overlap: {config.chunking.chunk_overlap}")
     logger.info(f"  Reranker: {'enabled' if config.reranker.enabled else 'disabled'}")

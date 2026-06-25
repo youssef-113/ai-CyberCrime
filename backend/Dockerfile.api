@@ -25,9 +25,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Python Dependencies (slim — no ML frameworks) ──
+# ── Python Dependencies ──
+# CPU-only torch first (RAG query embeddings need sentence-transformers -> torch).
+# Pin the CPU wheel index to avoid pulling the multi-GB CUDA build.
 COPY requirements-api.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements-api.txt
 
 # ── Application Code ──

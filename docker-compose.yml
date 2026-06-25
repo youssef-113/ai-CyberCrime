@@ -37,8 +37,6 @@ services:
         condition: service_healthy
       ollama:
         condition: service_started
-      chromadb:
-        condition: service_started
     healthcheck:
       test: [ "CMD", "curl", "-fs", "http://localhost:8000/health" ]
       interval: 30s
@@ -72,8 +70,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      chromadb:
-        condition: service_started
     restart: unless-stopped
 
   # ══════════════════════════════════════════════════════════════════════════
@@ -109,13 +105,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
-    restart: unless-stopped
-
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: chromadb
-    ports:
-      - "8001:8000"
     restart: unless-stopped
 
   ollama:
