@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { getTranslation } from '../utils/translations'
 import { validatePasswordStrength } from '../utils/validators'
-import { showError, closeAlert } from '../utils/alertConfig'
+import { showError, closeAlert, forceCloseAllAlerts } from '../utils/alertConfig'
 import Swal from 'sweetalert2'
 
 const PASSWORD_RULES = [
@@ -287,7 +287,11 @@ export default function SignupPage() {
               size="lg"
               onClick={() => {
                 loginAsDemo()
-                setTimeout(() => navigate('/dashboard'), 1500)
+                setTimeout(() => {
+                  closeAlert()
+                  forceCloseAllAlerts()
+                  navigate('/dashboard')
+                }, 800)
               }}
             >
               <Zap className="w-5 h-5 text-warning" />

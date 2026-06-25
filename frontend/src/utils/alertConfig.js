@@ -164,6 +164,9 @@ export function getAlertConfig(type = 'info') {
     didOpen: (modal) => {
       modal.classList.add('alert-animate-in')
     },
+    willClose: () => {
+      setTimeout(forceCloseAllAlerts, 50)
+    },
   }
 
   // Type-specific styling
@@ -279,6 +282,25 @@ export function showLoading(title = 'Processing...', message = '') {
  */
 export function closeAlert() {
   return Swal.close()
+}
+
+/**
+ * Force-close ALL SweetAlert2 artifacts from the DOM.
+ * Swal.close() sometimes leaves the .swal2-container backdrop,
+ * which blocks all pointer events and makes the app unclickable.
+ */
+export function forceCloseAllAlerts() {
+  // Remove all leftover SweetAlert2 DOM elements
+  document.querySelectorAll('.swal2-container, .swal2-backdrop-show, .swal2-popup, .swal2-overlay')
+    .forEach(el => el.remove())
+  // Reset body/html classes added by SweetAlert2
+  document.body.classList.remove(
+    'swal2-shown', 'swal2-height-auto', 'swal2-no-backdrop', 'swal2-toast-shown'
+  )
+  document.documentElement.classList.remove('swal2-height-auto')
+  // Remove inline style pollution
+  document.body.style.removeProperty('padding-right')
+  document.body.style.removeProperty('overflow-y')
 }
 
 /**

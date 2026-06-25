@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { authApi } from '../api/auth'
-import { ActionAlerts, mapErrorMessage, closeAlert, showToast } from '../utils/alertConfig'
+import { ActionAlerts, mapErrorMessage, forceCloseAllAlerts, showToast } from '../utils/alertConfig'
 import Swal from 'sweetalert2'
 
 const AuthContext = createContext(null)
@@ -75,10 +75,10 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null)
   const [sessionValidated, setSessionValidated] = useState(false)
 
-  // Close any open SweetAlert modals on route change to prevent blocking interactions
+  // Force-close any open SweetAlert modals on route change to prevent blocking interactions
   useEffect(() => {
     Swal.close()
-    closeAlert()
+    forceCloseAllAlerts()
   }, [location.pathname])
 
   const persistAuth = useCallback((token, refreshToken, user) => {

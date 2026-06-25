@@ -10,6 +10,7 @@ import Button from '../components/ui/Button'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { getTranslation } from '../utils/translations'
+import { closeAlert, forceCloseAllAlerts } from '../utils/alertConfig'
 import { useNavigate } from 'react-router-dom'
 
 /* ─── Data ─────────────────────────────────────────────────────────────── */
@@ -311,7 +312,11 @@ export default function LandingPage() {
                                transition-all duration-200"
                     onClick={() => {
                       loginAsDemo()
-                      setTimeout(() => navigate('/dashboard'), 1500)
+                      setTimeout(() => {
+                        closeAlert()
+                        forceCloseAllAlerts()
+                        navigate('/dashboard')
+                      }, 800)
                     }}
                   >
                     {t('landing.explorePlatform')}
@@ -548,7 +553,11 @@ export default function LandingPage() {
                 className="gap-2 px-10 py-4 text-base hover:scale-[1.02] transition-transform duration-200"
                 onClick={() => {
                   loginAsDemo()
-                  setTimeout(() => navigate('/dashboard'), 1500)
+                  setTimeout(() => {
+                    closeAlert()
+                    forceCloseAllAlerts()
+                    navigate('/dashboard')
+                  }, 800)
                 }}
               >
                 <Zap className="w-5 h-5 text-warning" />

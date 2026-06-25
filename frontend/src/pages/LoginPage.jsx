@@ -7,7 +7,7 @@ import Input from '../components/ui/Input'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { getTranslation } from '../utils/translations'
-import { showError, closeAlert } from '../utils/alertConfig'
+import { showError, closeAlert, forceCloseAllAlerts } from '../utils/alertConfig'
 import Swal from 'sweetalert2'
 
 export default function LoginPage() {
@@ -41,8 +41,12 @@ export default function LoginPage() {
 
     try {
       await login(email, password)
-      // Delay navigation to let the alert be visible
-      setTimeout(() => navigate('/dashboard'), 2500)
+      // Close alert overlay before navigating to prevent blocking dashboard
+      setTimeout(() => {
+        closeAlert()
+        forceCloseAllAlerts()
+        navigate('/dashboard')
+      }, 800)
     } catch (err) {
       // Error alert is already shown by ActionAlerts.authError in AuthContext
     }
@@ -192,7 +196,11 @@ export default function LoginPage() {
               size="lg"
               onClick={() => {
                 loginAsDemo()
-                setTimeout(() => navigate('/dashboard'), 1500)
+                setTimeout(() => {
+                  closeAlert()
+                  forceCloseAllAlerts()
+                  navigate('/dashboard')
+                }, 800)
               }}
             >
               <Zap className="w-5 h-5 text-warning" />
