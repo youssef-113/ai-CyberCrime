@@ -2,7 +2,7 @@
 ACEB Backend - Monolithic FastAPI Application
 AI Cybercrime Evidence Builder - Production MVP Architecture
 """
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import os
@@ -44,10 +44,14 @@ async def rate_limit_handler(request: Request, exc):
         content={"detail": "Rate limit exceeded. Try again later."},
     )
 
-# ── CORS ───────────────────────────────────────────────────────────────
+# ── CORS (Starlette built-in — innermost) ─────────────────────────────
+_cors_origins = [
+    o.strip()
+    for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,https://ai-cyber-crime.vercel.app,http://127.0.0.1:3000").split(",")
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000,https://ai-cyber-crime.vercel.app,http://127.0.0.1:3000").split(","),
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -89,6 +93,28 @@ async def request_context_middleware(request: Request, call_next):
     response.headers["Cache-Control"] = "no-store"
     return response
 
+# ── CORS Preflight Middleware (outermost — added last, runs first) ─────
+@app.middleware("http")
+async def cors_preflight_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        origin = request.headers.get("origin")
+        if origin:
+            allowed = [
+                o.strip()
+                for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,https://ai-cyber-crime.vercel.app,http://127.0.0.1:3000").split(",")
+            ]
+            if origin in allowed or "*" in allowed:
+                response = Response(status_code=200)
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+                response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Request-ID, X-Session-ID, X-Tenant-ID, X-CSRF-Token"
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Max-Age"] = "600"
+                return response
+        response = Response(status_code=204)
+        return response
+    return await call_next(request)
+
 # ── Include All Routers ────────────────────────────────────────────────
 app.include_router(api_router)
 app.include_router(chat_router)
@@ -96,7 +122,7 @@ app.include_router(classifier_router)
 app.include_router(ocr_router)
 app.include_router(rag_router)
 app.include_router(verification_router)
-app.include_router(pdf_router)
+app.include_router(pdf_router)      
 
 # ── Health Check ───────────────────────────────────────────────────────
 @app.get("/health")
