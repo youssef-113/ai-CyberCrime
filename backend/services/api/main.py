@@ -1,8 +1,6 @@
 """API Gateway - Main Orchestrator (Port 8000)"""
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException, Depends, Query, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, UploadFile, File, BackgroundTasks, HTTPException, Depends, Query, Request, Response
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, validator
 from typing import Any, Dict, List, Optional
 import httpx
@@ -17,30 +15,11 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from services.common.logging import configure_structured_logging, set_request_context, clear_request_context
-
 from services.security.security import (
     MAX_UPLOAD_FILES,
     validate_upload_file,
     sanitize_payload,
     sanitize_string,
-    validate_input,
-    get_client_ip,
-    is_ip_blocked,
-    record_failed_attempt,
-    reset_failed_attempts,
-    check_rate_limit,
-    get_rate_limit_headers,
-    get_security_headers,
-    log_security_event,
-    generate_csrf_token,
-    validate_csrf_token,
-    validate_ocr_text,
-    validate_chat_message,
-    MAX_REQUEST_SIZE_BYTES,
-    sanitize_text_for_llm,
-    MAX_OCR_PAGES,
-    MAX_OCR_TIMEOUT,
 )
 
 from services.auth.auth import (
@@ -173,215 +152,11 @@ async def verify_access_token(access_token: Optional[str] = Query(None)):
         raise HTTPException(status_code=401, detail="User not found")
     return user
 
-app = FastAPI(
-    title="Cybercrime AI - API Gateway",
-    description="Main orchestrator for the 6-stage AI pipeline with multi-user auth",
-    version="2.0.0"
-)
+router = APIRouter(prefix="/api")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(","),
-    allow_methods=["*"],
-    allow_headers=["*", "X-Session-ID", "X-Tenant-ID"],
-    allow_credentials=True,
-)
-
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=os.getenv("TRUSTED_HOSTS", "localhost,127.0.0.1").split(","),
-)
-
-
-# Security middleware
-@app.middleware("http")
-async def security_middleware(request: Request, call_next):
-    """Apply security checks to all requests"""
-    # Get client IP
-    client_ip = get_client_ip(request)
-    
-    # Log incoming request
-    logger.info(f"Request: {request.method} {request.url.path} from {client_ip}")
-    
-    # Check if IP is blocked
-    if is_ip_blocked(client_ip):
-        log_security_event("blocked_ip_access", {"path": request.url.path}, client_ip)
-        return JSONResponse(
-            status_code=403,
-            content={"detail": "Access denied"}
-        )
-    
-    # Check request size
-    content_length = request.headers.get("content-length")
-    if content_length:
-        content_length = int(content_length)
-        if content_length > MAX_REQUEST_SIZE_BYTES:
-            log_security_event("request_too_large", {"size": content_length, "path": request.url.path}, client_ip)
-            return JSONResponse(
-                status_code=413,
-                content={"detail": f"Request too large. Maximum is {MAX_REQUEST_SIZE_BYTES} bytes"}
-            )
-    
-    # Rate limiting
-    rate_limit_key = get_rate_limit_key(request)
-    limit_type = "auth" if "/auth/" in request.url.path else "default"
-    
-    if not check_rate_limit(rate_limit_key, limit_type):
-        log_security_event("rate_limit_exceeded", {"path": request.url.path, "limit_type": limit_type}, client_ip)
-        headers = get_rate_limit_headers(rate_limit_key, limit_type)
-        return JSONResponse(
-            status_code=429,
-            content={"detail": "Rate limit exceeded"},
-            headers=headers
-        )
-    
-    # JWT verification for protected routes (except auth endpoints)
-    if not request.url.path.startswith("/auth/"):
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header:
-            try:
-                token = auth_header.split(" ", 1)[1] if auth_header.lower().startswith("bearer ") else auth_header
-                payload = decode_token(token)
-                # Add user info to request state for downstream use
-                request.state.user_id = payload.get("sub")
-                request.state.user_email = payload.get("email")
-            except Exception as e:
-                logger.warning(f"JWT verification failed: {str(e)}")
-                # Don't block request, just log it - let individual endpoints handle auth
-        else:
-            logger.debug("No Authorization header provided")
-    
-    # Request validation for POST/PUT/PATCH
-    if request.method in ["POST", "PUT", "PATCH"]:
-        try:
-            # Validate request body if present
-            if request.headers.get("content-type", "").startswith("application/json"):
-                body = await request.json()
-                # Validate input
-                validated_body = validate_input(body, "request_body")
-                # Store validated body in request state
-                request.state.validated_body = validated_body
-        except Exception as e:
-            logger.error(f"Request validation failed: {str(e)}")
-            log_security_event("request_validation_failed", {"path": request.url.path, "error": str(e)}, client_ip)
-            return JSONResponse(
-                status_code=400,
-                content={"detail": "Invalid request body"}
-            )
-    
-    # Process request
-    response = await call_next(request)
-    
-    # Add security headers
-    security_headers = get_security_headers()
-    for key, value in security_headers.items():
-        response.headers[key] = value
-    
-    # Add rate limit headers
-    rate_limit_headers = get_rate_limit_headers(rate_limit_key, limit_type)
-    for key, value in rate_limit_headers.items():
-        response.headers[key] = value
-    
-    # Log response
-    logger.info(f"Response: {response.status_code} for {request.method} {request.url.path}")
-    
-    return response
-
-@app.on_event("startup")
-async def startup_event():
-    configure_structured_logging()
-    logger.info("API gateway starting", service="api.gateway")
-
-
-@app.middleware("http")
-async def request_context_middleware(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-    user_id = None
-    authorization = request.headers.get("Authorization", "")
-    if authorization.lower().startswith("bearer "):
-        try:
-            user_payload = decode_token(authorization.split(" ", 1)[1])
-            user_id = user_payload.get("sub")
-        except Exception:
-            user_id = None
-
-    set_request_context(
-        request_id=request_id,
-        user_id=user_id,
-        path=str(request.url.path),
-        method=request.method,
-    )
-
-    try:
-        response = await call_next(request)
-    except Exception as exc:
-        logger.exception("Unhandled request error")
-        raise
-    finally:
-        clear_request_context()
-
-    response.headers["X-Request-ID"] = request_id
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=(), payment=()"
-    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
-    response.headers["X-Download-Options"] = "noopen"
-    response.headers["Cache-Control"] = "no-store"
-    return response
 
 # ── Rate Limiting ──────────────────────────────────────────────────
 limiter = Limiter(key_func=get_rate_limit_key)
-app.state.limiter = limiter
-
-@app.exception_handler(RateLimitExceeded)
-async def rate_limit_handler(request, exc):
-    """Handle rate limit exceeded errors"""
-    logger.warning("Rate limit exceeded", extra={"path": str(request.url.path), "method": request.method})
-    return JSONResponse(
-        status_code=429,
-        content={
-            "error": {
-                "code": 429,
-                "message": "Rate limit exceeded. Try again later.",
-                "request_id": request.state.request_id if hasattr(request.state, "request_id") else None,
-            }
-        },
-    )
-
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
-    logger.warning(
-        "HTTP exception raised",
-        extra={"status_code": exc.status_code, "detail": exc.detail},
-        exc_info=exc if exc.status_code >= 500 else None,
-    )
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error": {
-                "code": exc.status_code,
-                "message": exc.detail,
-                "request_id": request.state.request_id if hasattr(request.state, "request_id") else None,
-            }
-        },
-    )
-
-
-@app.exception_handler(Exception)
-async def generic_exception_handler(request: Request, exc: Exception):
-    logger.exception("Unexpected server error")
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": {
-                "code": 500,
-                "message": "Internal server error",
-                "request_id": request.state.request_id if hasattr(request.state, "request_id") else None,
-            }
-        },
-    )
 
 # Service URLs (from environment or defaults).
 # The backend is deployed as a single monolith (backend/main.py) that mounts
@@ -389,7 +164,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
 # /chat. The gateway therefore proxies to itself over HTTP. Defaults below
 # target the local monolith; docker-compose overrides them to the `backend`
 # service host so the celery worker (separate container) can reach the API too.
-_SELF = os.getenv("MONOLITH_BASE_URL", "http://localhost:8000")
+_SELF = os.getenv("MONOLITH_BASE_URL", "https://cyber-crime-production.up.railway.app/")
 SERVICE_URLS = {
     "ocr": os.getenv("OCR_SERVICE_URL", f"{_SELF}/ocr"),
     "classifier": os.getenv("CLASSIFIER_SERVICE_URL", f"{_SELF}/classifier"),
@@ -447,7 +222,7 @@ class ChatPdfTriggerRequest(BaseModel):
 #  PUBLIC ROUTES (no auth required)
 # ══════════════════════════════════════════════════════════════════════════
 
-@app.get("/")
+@router.get("/")
 def root():
     return {
         "service": "Cybercrime AI - API Gateway",
@@ -456,7 +231,7 @@ def root():
         "auth_enabled": True,
     }
 
-@app.get("/health")
+@router.get("/health")
 async def health():
     """Check all service health including Supabase connection"""
     health_status = {"gateway": "healthy", "services": {}, "database": "unknown"}
@@ -482,7 +257,7 @@ async def health():
     return health_status
 
 
-@app.get("/health/aggregate")
+@router.get("/health/aggregate")
 async def health_aggregate():
     """Aggregate API gateway health with LLM connectivity and current active progress."""
     base_health = await health()
@@ -492,7 +267,7 @@ async def health_aggregate():
     return base_health
 
 
-@app.get("/ready")
+@router.get("/ready")
 async def ready():
     """Readiness probe for orchestration and deployment."""
     health_status = await health()
@@ -501,7 +276,7 @@ async def ready():
     return {"status": "ready", "services": health_status["services"]}
 
 
-@app.get("/metrics")
+@router.get("/metrics")
 async def metrics():
     """Expose lightweight service metrics for monitoring."""
     counts = {}
@@ -525,7 +300,7 @@ async def metrics():
     }
 
 
-@app.get("/audit/events")
+@router.get("/audit/events")
 async def list_audit_events(
     limit: int = 50,
     offset: int = 0,
@@ -536,7 +311,7 @@ async def list_audit_events(
     return {"audit_events": events, "limit": limit, "offset": offset}
 
 
-@app.get("/cases/{case_id}/events")
+@router.get("/cases/{case_id}/events")
 async def case_events(
     case_id: str,
     user: Optional[dict] = Depends(verify_access_token),
@@ -574,7 +349,7 @@ async def case_events(
 #  AUTH ROUTES
 # ══════════════════════════════════════════════════════════════════════════
 
-@app.post("/auth/register", response_model=TokenResponse, status_code=201)
+@router.post("/auth/register", response_model=TokenResponse, status_code=201)
 @limiter.limit("5/minute")
 async def register(request: Request, req: RegisterRequest):
     """Register a new user account."""
@@ -589,7 +364,7 @@ async def register(request: Request, req: RegisterRequest):
     return response
 
 
-@app.post("/auth/login", response_model=TokenResponse)
+@router.post("/auth/login", response_model=TokenResponse)
 @limiter.limit("10/minute")
 async def login(request: Request, req: LoginRequest):
     """Login with email and password."""
@@ -604,7 +379,7 @@ async def login(request: Request, req: LoginRequest):
     return response
 
 
-@app.post("/auth/refresh")
+@router.post("/auth/refresh")
 @limiter.limit("10/minute")
 async def refresh_token(request: Request, req: RefreshRequest):
     """Exchange a refresh token for new access + refresh tokens."""
@@ -621,7 +396,7 @@ async def refresh_token(request: Request, req: RefreshRequest):
     return response
 
 
-@app.post("/auth/logout")
+@router.post("/auth/logout")
 async def logout(user_id: str = Depends(get_current_user_id)):
     """Logout - revokes all refresh tokens."""
     await logout_user(user_id)
@@ -634,13 +409,13 @@ async def logout(user_id: str = Depends(get_current_user_id)):
     return {"message": "Logged out successfully"}
 
 
-@app.get("/auth/me", response_model=UserResponse)
+@router.get("/auth/me", response_model=UserResponse)
 async def get_me(current_user: UserResponse = Depends(get_current_user)):
     """Get the current authenticated user's profile."""
     return current_user
 
 
-@app.put("/auth/password")
+@router.put("/auth/password")
 async def change_password(
     req: ChangePasswordRequest,
     user_id: str = Depends(get_current_user_id),
@@ -650,7 +425,7 @@ async def change_password(
     return {"message": "Password changed successfully. Please login again."}
 
 
-@app.get("/auth/users")
+@router.get("/auth/users")
 async def list_users(current_user: UserResponse = Depends(get_current_user)):
     """List all users (admin feature - returns limited fields)."""
     db = get_supabase()
@@ -658,7 +433,7 @@ async def list_users(current_user: UserResponse = Depends(get_current_user)):
     return {"users": result.data or []}
 
 
-@app.post("/auth/verify")
+@router.post("/auth/verify")
 async def verify_session(current_user: UserResponse = Depends(get_current_user)):
     """Verify current session is valid. Returns tenant_id and active sessions."""
     tenant_id = f"user_{current_user.id}"
@@ -700,7 +475,7 @@ class CreateSessionRequest(BaseModel):
     max_tokens: int = 800
 
 
-@app.post("/sessions")
+@router.post("/sessions")
 async def create_session(
     request: CreateSessionRequest,
     user_id: str = Depends(get_current_user_id),
@@ -725,7 +500,7 @@ async def create_session(
     }
 
 
-@app.get("/sessions/user/{user_id}")
+@router.get("/sessions/user/{user_id}")
 async def list_user_sessions(
     user_id: str = Depends(get_current_user_id),
     limit: int = 10,
@@ -763,7 +538,7 @@ async def list_user_sessions(
     return {"sessions": sessions, "total": total, "limit": limit, "offset": offset}
 
 
-@app.get("/sessions/{session_id}")
+@router.get("/sessions/{session_id}")
 async def get_session_details(
     session_id: str,
     user_id: str = Depends(get_current_user_id)
@@ -804,7 +579,7 @@ async def get_session_details(
 #  PROTECTED ROUTES (auth required)
 # ══════════════════════════════════════════════════════════════════════════
 
-@app.post("/analyze")
+@router.post("/analyze")
 @limiter.limit("5/minute")
 async def analyze(
     request: Request,
@@ -837,7 +612,7 @@ async def analyze(
         "message": "Analysis started. Check /cases/{case_id} for results."
     }
 
-@app.post("/analyze/json")
+@router.post("/analyze/json")
 @limiter.limit("5/minute")
 async def analyze_json(
     request: Request,
@@ -869,7 +644,7 @@ async def analyze_json(
         await update_case(case_id, "failed", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/cases/{case_id}")
+@router.get("/cases/{case_id}")
 async def get_case(
     case_id: str,
     user_id: str = Depends(get_current_user_id),
@@ -888,12 +663,12 @@ async def get_case(
         case["updated_at"] = progress.get("updated_at", case.get("updated_at"))
     return case
 
-@app.get("/cases")
+@router.get("/cases")
 async def list_cases(user_id: str = Depends(get_current_user_id)):
     """List all cases for the current user"""
     return await get_user_cases(user_id)
 
-@app.get("/pdf/{case_id}")
+@router.get("/pdf/{case_id}")
 async def download_pdf(
     case_id: str,
     user_id: str = Depends(get_current_user_id),
@@ -927,7 +702,7 @@ class VerificationRequest(BaseModel):
     case_id: Optional[str] = None
     session_id: Optional[str] = None
 
-@app.post("/verify")
+@router.post("/verify")
 @limiter.limit("20/minute")
 async def verify_evidence(
     request: Request,
@@ -984,7 +759,7 @@ async def verify_evidence(
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Verification service timeout")
 
-@app.get("/verifications")
+@router.get("/verifications")
 async def list_verifications(
     limit: int = 50,
     offset: int = 0,
@@ -1003,7 +778,7 @@ async def list_verifications(
     except ServiceCallError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
-@app.get("/verifications/{verification_id}")
+@router.get("/verifications/{verification_id}")
 async def get_verification(
     verification_id: str,
     user_id: str = Depends(get_current_user_id),
@@ -1028,7 +803,7 @@ async def get_verification(
             raise HTTPException(status_code=404, detail="Verification not found")
         raise HTTPException(status_code=502, detail=str(e))
 
-@app.get("/verifications/{verification_id}/rounds")
+@router.get("/verifications/{verification_id}/rounds")
 async def get_verification_rounds(
     verification_id: str,
     user_id: str = Depends(get_current_user_id),
@@ -1057,7 +832,7 @@ async def get_verification_rounds(
             raise HTTPException(status_code=404, detail="Verification not found")
         raise HTTPException(status_code=502, detail=str(e))
 
-@app.get("/verifications/{verification_id}/audit")
+@router.get("/verifications/{verification_id}/audit")
 async def get_verification_audit(
     verification_id: str,
     user_id: str = Depends(get_current_user_id),
@@ -1101,7 +876,7 @@ async def get_verification_audit(
 #  CHAT ROUTES (protected, user-scoped)
 # ══════════════════════════════════════════════════════════════════════════
 
-@app.get("/sessions/list")
+@router.get("/sessions/list")
 async def list_sessions(user_id: str = Depends(get_current_user_id)):
     """List all chat sessions for the current user."""
     sessions = await get_user_sessions(user_id)
@@ -1115,7 +890,7 @@ class ChatRequest(BaseModel):
     history: Optional[List[dict]] = None  # Recent conversation history for context
 
 
-@app.post("/chat")
+@router.post("/chat")
 @limiter.limit("20/minute")
 async def chat(
     request: Request,
@@ -1244,7 +1019,7 @@ async def chat(
     return reply_data
 
 
-@app.post("/chat/upload")
+@router.post("/chat/upload")
 @limiter.limit("10/minute")
 async def chat_upload_documents(
     request: Request,
@@ -1332,7 +1107,7 @@ async def chat_upload_documents(
     }
 
 
-@app.post("/chat/pdf_trigger")
+@router.post("/chat/pdf_trigger")
 async def chat_pdf_trigger(
     request: ChatPdfTriggerRequest,
     user_id: str = Depends(get_current_user_id),
@@ -1361,7 +1136,7 @@ class SessionRequest(BaseModel):
     session_id: str
 
 
-@app.post("/chat/reset")
+@router.post("/chat/reset")
 async def reset_chat(
     request: SessionRequest,
     user_id: str = Depends(get_current_user_id),
@@ -1375,7 +1150,7 @@ async def reset_chat(
     return {"message": "Chat session reset", "session_id": request.session_id}
 
 
-@app.get("/chat/history")
+@router.get("/chat/history")
 async def chat_history(
     session_id: str,
     user_id: str = Depends(get_current_user_id),
@@ -1395,7 +1170,7 @@ async def chat_history(
 #  OCR PROXY ROUTES (protected, user-scoped)
 # ══════════════════════════════════════════════════════════════════════════
 
-@app.post("/ocr/extract")
+@router.post("/ocr/extract")
 @limiter.limit("20/minute")
 async def ocr_extract(
     request: Request,
@@ -1427,7 +1202,7 @@ async def ocr_extract(
         raise HTTPException(status_code=503, detail=f"OCR service unavailable: {e}")
 
 
-@app.post("/ocr/extract/batch")
+@router.post("/ocr/extract/batch")
 @limiter.limit("10/minute")
 async def ocr_extract_batch(
     request: Request,
@@ -1463,7 +1238,7 @@ async def ocr_extract_batch(
         raise HTTPException(status_code=503, detail=f"OCR service unavailable: {e}")
 
 
-@app.get("/ocr/engines/status")
+@router.get("/ocr/engines/status")
 async def ocr_engines_status(
     user_id: str = Depends(get_current_user_id),
 ):
@@ -1482,7 +1257,7 @@ async def ocr_engines_status(
 
 # ── Async OCR job proxy routes ─────────────────────────────────────────────
 
-@app.post("/ocr/jobs/upload")
+@router.post("/ocr/jobs/upload")
 @limiter.limit("10/minute")
 async def ocr_job_upload(
     request: Request,
@@ -1505,7 +1280,7 @@ async def ocr_job_upload(
         raise HTTPException(status_code=503, detail=f"OCR service unavailable: {e}")
 
 
-@app.get("/ocr/jobs/{job_id}/status")
+@router.get("/ocr/jobs/{job_id}/status")
 async def ocr_job_status(
     job_id: str,
     user_id: str = Depends(get_current_user_id),
@@ -1523,7 +1298,7 @@ async def ocr_job_status(
         raise HTTPException(status_code=503, detail=f"OCR service unavailable: {e}")
 
 
-@app.get("/ocr/jobs/{job_id}/result")
+@router.get("/ocr/jobs/{job_id}/result")
 async def ocr_job_result(
     job_id: str,
     user_id: str = Depends(get_current_user_id),
@@ -1541,7 +1316,7 @@ async def ocr_job_result(
         raise HTTPException(status_code=503, detail=f"OCR service unavailable: {e}")
 
 
-@app.post("/ocr/jobs/{job_id}/retry")
+@router.post("/ocr/jobs/{job_id}/retry")
 @limiter.limit("5/minute")
 async def ocr_job_retry(
     request: Request,
@@ -1565,7 +1340,7 @@ async def ocr_job_retry(
 #  RAG PROXY ROUTES (protected, user-scoped)
 # ══════════════════════════════════════════════════════════════════════════
 
-@app.post("/retrieve")
+@router.post("/retrieve")
 @limiter.limit("30/minute")
 async def retrieve_articles(
     request: Request,
@@ -1598,7 +1373,7 @@ async def retrieve_articles(
         raise HTTPException(status_code=503, detail=str(e))
 
 
-@app.post("/classify")
+@router.post("/classify")
 @limiter.limit("20/minute")
 async def classify_text(
     request: Request,
@@ -1622,7 +1397,7 @@ async def classify_text(
         raise HTTPException(status_code=503, detail=str(e))
 
 
-@app.get("/stats")
+@router.get("/stats")
 async def rag_stats(user_id: str = Depends(get_current_user_id)):
     """Proxy to RAG service: get service statistics."""
     try:
@@ -1637,7 +1412,7 @@ async def rag_stats(user_id: str = Depends(get_current_user_id)):
         raise HTTPException(status_code=503, detail=str(e))
 
 
-@app.post("/faithfulness")
+@router.post("/faithfulness")
 @limiter.limit("20/minute")
 async def check_faithfulness(
     request: Request,
@@ -1662,7 +1437,7 @@ async def check_faithfulness(
         raise HTTPException(status_code=503, detail=str(e))
 
 
-@app.post("/index")
+@router.post("/index")
 @limiter.limit("5/minute")
 async def index_articles(
     request: Request,
@@ -1690,7 +1465,7 @@ async def index_articles(
         raise HTTPException(status_code=503, detail=str(e))
 
 
-@app.get("/tenants")
+@router.get("/tenants")
 async def list_tenants(user_id: str = Depends(get_current_user_id)):
     """Proxy to RAG service: list tenant namespaces."""
     try:
@@ -2050,7 +1825,7 @@ async def get_current_admin(current_user: UserResponse = Depends(get_current_use
     return current_user
 
 
-@app.get("/admin/users")
+@router.get("/admin/users")
 async def admin_list_users(
     limit: int = 50,
     offset: int = 0,
@@ -2078,7 +1853,7 @@ async def admin_list_users(
     }
 
 
-@app.get("/admin/users/{user_id}")
+@router.get("/admin/users/{user_id}")
 async def admin_get_user(user_id: str, current_admin: UserResponse = Depends(get_current_admin)):
     """Get detailed user information (admin only)"""
     db = get_supabase()
@@ -2090,7 +1865,7 @@ async def admin_get_user(user_id: str, current_admin: UserResponse = Depends(get
     return result.data[0]
 
 
-@app.put("/admin/users/{user_id}")
+@router.put("/admin/users/{user_id}")
 async def admin_update_user(
     user_id: str,
     update_data: dict,
@@ -2113,7 +1888,7 @@ async def admin_update_user(
     return result.data[0]
 
 
-@app.delete("/admin/users/{user_id}")
+@router.delete("/admin/users/{user_id}")
 async def admin_delete_user(user_id: str, current_admin: UserResponse = Depends(get_current_admin)):
     """Deactivate user account (admin only)"""
     db = get_supabase()
@@ -2136,7 +1911,7 @@ async def admin_delete_user(user_id: str, current_admin: UserResponse = Depends(
     return {"message": "User deactivated successfully"}
 
 
-@app.get("/admin/stats")
+@router.get("/admin/stats")
 async def admin_get_stats(current_admin: UserResponse = Depends(get_current_admin)):
     """Get system statistics (admin only)"""
     db = get_supabase()
@@ -2185,7 +1960,7 @@ async def admin_get_stats(current_admin: UserResponse = Depends(get_current_admi
     }
 
 
-@app.get("/admin/cases")
+@router.get("/admin/cases")
 async def admin_list_cases(
     limit: int = 50,
     offset: int = 0,
@@ -2210,7 +1985,7 @@ async def admin_list_cases(
     }
 
 
-@app.get("/admin/security-events")
+@router.get("/admin/security-events")
 async def admin_list_security_events(
     limit: int = 50,
     offset: int = 0,
@@ -2235,7 +2010,7 @@ async def admin_list_security_events(
     }
 
 
-@app.post("/admin/security-events/{event_id}/resolve")
+@router.post("/admin/security-events/{event_id}/resolve")
 async def admin_resolve_security_event(
     event_id: str,
     current_admin: UserResponse = Depends(get_current_admin)
@@ -2249,6 +2024,3 @@ async def admin_resolve_security_event(
     
     return {"message": "Security event resolved"}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)

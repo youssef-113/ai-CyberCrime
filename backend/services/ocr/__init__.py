@@ -1,5 +1,5 @@
 """OCR & Entity Extraction Service — Port 8001"""
 
-from .main import app
+from .main import router
 
-__all__ = ["app"]
+__all__ = ["router"]

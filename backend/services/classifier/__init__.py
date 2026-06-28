@@ -1,5 +1,5 @@
 """Crime Classification Service — Port 8002"""
 
-from .main import app
+from .main import router
 
-__all__ = ["app"]
+__all__ = ["router"]

@@ -1,5 +1,5 @@
 """Legal Chatbot Service (Arabic) — Port 8006"""
 
-from .main import app
+from .main import router
 
-__all__ = ["app"]
+__all__ = ["router"]

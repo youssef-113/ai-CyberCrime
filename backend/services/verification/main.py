@@ -2,22 +2,14 @@
 import uuid
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from .graph import run_verification_graph
 from .supabase_store import SupabaseVerificationStore
 from .database import VerificationStore as SQLiteStore
 
-app = FastAPI(title="Verification Service", version="2.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+router = APIRouter(prefix="/verification")
 
 # ── Audit store (module-level singleton) ─────────────────────────────────
 # Uses Supabase when env vars are set, falls back to local SQLite
@@ -83,7 +75,7 @@ class CaseSummary(BaseModel):
 # ── Endpoints ────────────────────────────────────────────────────────────
 
 
-@app.get("/health")
+@router.get("/health")
 def health():
     """
     Liveness + readiness probe.
@@ -136,7 +128,7 @@ def health():
     }
 
 
-@app.post("/verify", response_model=VerificationResponse)
+@router.post("/verify", response_model=VerificationResponse)
 async def verify(request: VerificationRequest):
     """Run multi-agent verification via LangGraph with audit trail."""
     case_id = request.case_id or str(uuid.uuid4())
@@ -169,7 +161,7 @@ async def verify(request: VerificationRequest):
 # ── Audit trail endpoints ────────────────────────────────────────────────
 
 
-@app.get("/cases", response_model=List[CaseSummary])
+@router.get("/cases", response_model=List[CaseSummary])
 def list_cases(limit: int = 50, offset: int = 0, user_id: Optional[str] = None):
     """List all verification cases (newest first).
 
@@ -179,7 +171,7 @@ def list_cases(limit: int = 50, offset: int = 0, user_id: Optional[str] = None):
     return store.list_cases(limit=limit, offset=offset, user_id=user_id)
 
 
-@app.get("/cases/{case_id}", response_model=CaseSummary)
+@router.get("/cases/{case_id}", response_model=CaseSummary)
 def get_case(case_id: str):
     """Get case-level summary."""
     summary = store.get_case_summary(case_id)
@@ -188,7 +180,7 @@ def get_case(case_id: str):
     return summary
 
 
-@app.get("/cases/{case_id}/rounds")
+@router.get("/cases/{case_id}/rounds")
 def get_case_rounds(case_id: str):
     """Get full round-by-round audit trail for a case."""
     history = store.get_case_history(case_id)
@@ -197,6 +189,3 @@ def get_case_rounds(case_id: str):
     return history
 
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8004)

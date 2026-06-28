@@ -829,7 +829,7 @@ Key environment variables (see `.env.example` for full list):
 | `CELERY_BROKER_URL`           | Celery broker (DB 1)                 | `redis://localhost:6379/1`|
 | `CELERY_RESULT_BACKEND`       | Celery backend (DB 2)                | `redis://localhost:6379/2`|
 | `CORS_ORIGINS`                | Allowed CORS origins                 | `http://localhost:3000`   |
-| `VITE_API_URL`                | Frontend API base URL                | `http://localhost:8000`   |
+| `VITE_API_URL`                | Frontend API base URL                | `https://cyber-crime-production.up.railway.app/`   |
 | `AUTH_DISABLED`               | Skip auth checks (dev only)          | `false`                   |
 | `CHANDRA_CONFIDENCE_THRESHOLD`| Chandra OCR min confidence           | `0.85`                    |
 | `PADDLE_CONFIDENCE_THRESHOLD` | PaddleOCR min confidence             | `0.80`                    |

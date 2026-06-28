@@ -119,8 +119,8 @@ npm run dev
 ## 6. Verify Setup
 
 ```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/api/health
+curl https://cyber-crime-production.up.railway.app//health
+curl https://cyber-crime-production.up.railway.app//api/health
 ```
 
 Expected response:
@@ -139,14 +139,14 @@ Expected response:
 | Service      | URL                           | Purpose                   |
 |--------------|-------------------------------|---------------------------|
 | Frontend     | http://localhost:3000          | React UI                  |
-| API Docs     | http://localhost:8000/api/docs | Swagger UI                |
-| API Gateway  | http://localhost:8000/api      | Main orchestrator         |
-| OCR          | http://localhost:8000/ocr      | Text extraction           |
-| Classifier   | http://localhost:8000/classifier| Crime classification      |
-| RAG          | http://localhost:8000/rag      | Law retrieval             |
-| Verification | http://localhost:8000/verification| Multi-agent check       |
-| PDF Gen      | http://localhost:8000/pdf      | Report generation         |
-| Chatbot      | http://localhost:8000/chat     | Legal assistant           |
+| API Docs     | https://cyber-crime-production.up.railway.app//api/docs | Swagger UI                |
+| API Gateway  | https://cyber-crime-production.up.railway.app//api      | Main orchestrator         |
+| OCR          | https://cyber-crime-production.up.railway.app//ocr      | Text extraction           |
+| Classifier   | https://cyber-crime-production.up.railway.app//classifier| Crime classification      |
+| RAG          | https://cyber-crime-production.up.railway.app//rag      | Law retrieval             |
+| Verification | https://cyber-crime-production.up.railway.app//verification| Multi-agent check       |
+| PDF Gen      | https://cyber-crime-production.up.railway.app//pdf      | Report generation         |
+| Chatbot      | https://cyber-crime-production.up.railway.app//chat     | Legal assistant           |
 
 ---
 

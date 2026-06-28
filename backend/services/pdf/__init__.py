@@ -1,5 +1,5 @@
 """PDF Generation Service (WeasyPrint + Jinja2) — Port 8005"""
 
-from .main import app
+from .main import router
 
-__all__ = ["app"]
+__all__ = ["router"]

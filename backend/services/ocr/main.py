@@ -28,8 +28,7 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from .arabic_utils import detect_language, normalize_arabic_text
@@ -66,19 +65,7 @@ MAGIC_BYTES: Dict[bytes, str] = {
     b"MM\x00*":         "image/tiff",
 }
 
-# ── FastAPI app ────────────────────────────────────────────────────────────
-app = FastAPI(
-    title="ACEB OCR Service",
-    description="Chandra OCR 2 → PaddleOCR → Groq AI understanding pipeline",
-    version="2.0.0",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+router = APIRouter(prefix="/ocr")
 
 # ── Singleton engine ───────────────────────────────────────────────────────
 _ocr_engine: Optional[OCREngine] = None
@@ -89,7 +76,7 @@ def _ensure_engine() -> OCREngine:
 
     The OCR app is mounted as a sub-application (backend/main.py), and Starlette
     does not propagate the parent's startup event to mounted sub-apps, so the
-    `@app.on_event("startup")` hook never fires under the monolith. Initialise on
+    `@router.on_event("startup")` hook never fires under the monolith. Initialise on
     first use instead so `/ocr/extract` works regardless of how the app is run.
     """
     global _ocr_engine
@@ -106,12 +93,6 @@ def _ensure_engine() -> OCREngine:
     return _ocr_engine
 
 
-@app.on_event("startup")
-async def startup_event() -> None:
-    # Still attempt eager init when run as a standalone app; harmless (no-op
-    # propagation) when mounted, where _ensure_engine() covers it.
-    _ensure_engine()
-    logger.info("OCR service started — engine initialised")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -235,7 +216,7 @@ async def _ocr_process(content: bytes, filename: str, block_id: str = "E001") ->
 #  Observability endpoints
 # ══════════════════════════════════════════════════════════════════════════════
 
-@app.get("/health")
+@router.get("/health")
 async def health() -> Dict[str, Any]:
     """Liveness + readiness probe — required by every service."""
     engine_ready = _ocr_engine is not None and _ocr_engine._initialized
@@ -274,7 +255,7 @@ async def health() -> Dict[str, Any]:
     }
 
 
-@app.get("/metrics")
+@router.get("/metrics")
 async def metrics() -> Dict[str, Any]:
     """OCR runtime metrics: latency, confidence, engine usage, error count."""
     if _ocr_engine is None:
@@ -282,7 +263,7 @@ async def metrics() -> Dict[str, Any]:
     return _ocr_engine.get_metrics()
 
 
-@app.get("/engines/status")
+@router.get("/engines/status")
 async def engines_status() -> Dict[str, Any]:
     """Detailed status of every OCR engine."""
     if _ocr_engine is None:
@@ -320,7 +301,7 @@ async def engines_status() -> Dict[str, Any]:
 #  Sync OCR endpoints (legacy-compatible)
 # ══════════════════════════════════════════════════════════════════════════════
 
-@app.post("/extract", response_model=OCRResponse)
+@router.post("/extract", response_model=OCRResponse)
 async def extract_text(
     file: UploadFile = File(...),
 ) -> OCRResponse:
@@ -329,7 +310,7 @@ async def extract_text(
     return await _ocr_process(content, file.filename or "upload")
 
 
-@app.post("/extract/batch")
+@router.post("/extract/batch")
 async def extract_batch(files: List[UploadFile] = File(...)) -> Dict[str, Any]:
     """Batch-process multiple files (sync, parallel)."""
     if _ocr_engine is None:
@@ -401,7 +382,7 @@ class JobResult(BaseModel):
     error:   Optional[str]            = None
 
 
-@app.post("/api/v1/ocr/upload", response_model=JobStatus)
+@router.post("/api/v1/ocr/upload", response_model=JobStatus)
 async def ocr_upload(file: UploadFile = File(...)) -> JobStatus:
     """
     Upload a file and enqueue an async OCR job via Celery.
@@ -428,14 +409,14 @@ async def ocr_upload(file: UploadFile = File(...)) -> JobStatus:
         raise HTTPException(status_code=503, detail=f"Could not enqueue job: {exc}")
 
 
-@app.post("/api/v1/ocr/process", response_model=OCRResponse)
+@router.post("/api/v1/ocr/process", response_model=OCRResponse)
 async def ocr_process_sync(file: UploadFile = File(...)) -> OCRResponse:
     """Process a file synchronously (immediate result, no job ID)."""
     content = await file.read()
     return await _ocr_process(content, file.filename or "upload")
 
 
-@app.get("/api/v1/ocr/status/{job_id}", response_model=JobStatus)
+@router.get("/api/v1/ocr/status/{job_id}", response_model=JobStatus)
 async def ocr_job_status(job_id: str) -> JobStatus:
     """Poll the status of an async OCR job."""
     try:
@@ -450,7 +431,7 @@ async def ocr_job_status(job_id: str) -> JobStatus:
         raise HTTPException(status_code=404, detail=f"Job not found: {exc}")
 
 
-@app.get("/api/v1/ocr/result/{job_id}", response_model=JobResult)
+@router.get("/api/v1/ocr/result/{job_id}", response_model=JobResult)
 async def ocr_job_result(job_id: str) -> JobResult:
     """Retrieve the result of a completed OCR job."""
     try:
@@ -468,7 +449,7 @@ async def ocr_job_result(job_id: str) -> JobResult:
         raise HTTPException(status_code=404, detail=f"Job not found: {exc}")
 
 
-@app.post("/api/v1/ocr/retry/{job_id}", response_model=JobStatus)
+@router.post("/api/v1/ocr/retry/{job_id}", response_model=JobStatus)
 async def ocr_job_retry(job_id: str) -> JobStatus:
     """
     Re-queue a failed OCR job.
@@ -547,6 +528,3 @@ def _save_temp(content: bytes, suffix: str) -> str:
         return tmp.name
 
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)

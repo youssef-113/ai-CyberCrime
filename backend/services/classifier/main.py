@@ -1,6 +1,5 @@
 """Classifier Service - Stage 3a: Crime Classification"""
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional
 import httpx
@@ -17,14 +16,7 @@ from .arabic_utils import normalize_arabic
 from .metrics_runtime import start_timer, record_classification, get_runtime_metrics
 from services.common.llm_client import llm_request
 
-app = FastAPI(title="Classifier Service", version="1.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+router = APIRouter(prefix="/classifier")
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "")
@@ -40,7 +32,7 @@ class ClassificationRequest(BaseModel):
 CRIME_TYPES = list(CRIME_DEFINITIONS.keys())
 
 
-@app.get("/health")
+@router.get("/health")
 def health():
     """
     Liveness + readiness probe.
@@ -81,12 +73,12 @@ def health():
     }
 
 
-@app.get("/metrics")
+@router.get("/metrics")
 def metrics():
     return get_runtime_metrics()
 
 
-@app.post("/classify", response_model=ClassificationOutput)
+@router.post("/classify", response_model=ClassificationOutput)
 async def classify(request: ClassificationRequest):
     start_time = start_timer()
 
@@ -164,8 +156,3 @@ def parse_classification(content: str) -> dict:
         "classifier_notes": data.get("classifier_notes", ""),
     }
 
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8002)

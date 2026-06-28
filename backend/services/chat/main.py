@@ -16,7 +16,7 @@ import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 
@@ -48,7 +48,9 @@ class HealthResponse(BaseModel):
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [CHATBOT] %(message)s")
 logger = logging.getLogger("chatbot")
 
-app = FastAPI(title="ACEB Legal Chatbot", version="1.0.0")
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/chat")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
@@ -631,7 +633,7 @@ def chat(
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
-@app.get("/health", response_model=HealthResponse)
+@router.get("/health", response_model=HealthResponse)
 async def health():
     """
     Liveness + readiness probe.
@@ -668,7 +670,7 @@ async def health():
     )
 
 
-@app.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
     """
     Send a message to the legal chatbot.
@@ -722,7 +724,7 @@ async def chat_endpoint(request: ChatRequest):
     )
 
 
-@app.post("/chat/reset")
+@router.post("/chat/reset")
 async def reset_chat(body: dict):
     """Clear all history for a session."""
     session_id = body.get("session_id", "")
@@ -736,7 +738,7 @@ async def reset_chat(body: dict):
     return {"status": "not_found", "session_id": session_id}
 
 
-@app.get("/chat/history")
+@router.get("/chat/history")
 async def get_history(session_id: str):
     """Get full conversation history for a session."""
     if not session_id:
@@ -755,7 +757,7 @@ async def get_history(session_id: str):
     }
 
 
-@app.get("/sessions")
+@router.get("/sessions")
 async def list_sessions():
     """List all active sessions (for admin/debug purposes)."""
     return {
@@ -772,7 +774,7 @@ async def list_sessions():
     }
 
 
-@app.post("/chat/pdf_trigger")
+@router.post("/chat/pdf_trigger")
 async def trigger_pdf_from_chat(body: dict):
     """
     Trigger PDF generation from chat context.

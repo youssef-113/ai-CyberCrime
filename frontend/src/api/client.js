@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { sanitizeAPIRequest, validateInput } from '../utils/security'
 
-// VITE_API_URL points at the monolith host (e.g. http://localhost:8000).
+// VITE_API_URL points at the monolith host (e.g. https://cyber-crime-production.up.railway.app/).
 // All frontend traffic is routed through the API gateway, which is mounted
 // at /api on the monolith and is the only layer that enforces auth + persists
 // to the database. Sub-app mounts (/chat, /ocr, /rag, ...) bypass that layer,
@@ -20,7 +20,7 @@ function resolveApiUrl() {
       return origin
     }
   }
-  return 'http://localhost:8000'
+  return 'https://cyber-crime-production.up.railway.app/'
 }
 
 const RAW_API_URL = resolveApiUrl()

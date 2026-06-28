@@ -2,64 +2,105 @@
 ACEB Backend - Monolithic FastAPI Application
 AI Cybercrime Evidence Builder - Production MVP Architecture
 """
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from fastapi.responses import JSONResponse
 import os
 import logging
+import uuid
 
-# Load .env file at startup so env vars are available even if docker-compose
-# does not pass them (belt-and-suspenders with the docker-compose env_file).
+from slowapi.errors import RateLimitExceeded
+
+from services.api.main import router as api_router, limiter as api_limiter
+from services.chat.main import router as chat_router
+from services.classifier.main import router as classifier_router
+from services.ocr.main import router as ocr_router
+from services.rag.main import router as rag_router
+from services.verification.main import router as verification_router
+from services.pdf.main import router as pdf_router
+
 try:
     from dotenv import load_dotenv
     load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 except Exception:
     pass
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("aceb.backend")
 
-# Import all service modules
-from services.api.main import app as api_app
-from services.chat.main import app as chat_app
-from services.classifier.main import app as classifier_app
-from services.ocr.main import app as ocr_app
-from services.rag.main import app as rag_app
-from services.verification.main import app as verification_app
-from services.pdf.main import app as pdf_app
-
-# Initialize FastAPI app
 app = FastAPI(
     title="ACEB Backend",
     description="AI Cybercrime Evidence Builder - Monolithic Backend",
     version="2.0.0"
 )
 
-# CORS middleware
+# ── Rate Limiter ────────────────────────────────────────────────────────
+app.state.limiter = api_limiter
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Try again later."},
+    )
+
+# ── CORS ───────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
+    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000,https://ai-cyber-crime.vercel.app,http://127.0.0.1:3000").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Mount all service routers
-app.mount("/api", api_app)
-app.mount("/chat", chat_app)
-app.mount("/classifier", classifier_app)
-app.mount("/ocr", ocr_app)
-app.mount("/rag", rag_app)
-app.mount("/verification", verification_app)
-app.mount("/pdf", pdf_app)
+# ── Global Exception Handlers ──────────────────────────────────────────
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
 
-# Health check
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled server error")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
+# ── Logging / Request Context Middleware ───────────────────────────────
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    logger.info(f"{request.method} {request.url.path} — request_id={request_id}")
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        logger.exception("Unhandled request error")
+        raise
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=(), payment=()"
+    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+    response.headers["X-Download-Options"] = "noopen"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+# ── Include All Routers ────────────────────────────────────────────────
+app.include_router(api_router)
+app.include_router(chat_router)
+app.include_router(classifier_router)
+app.include_router(ocr_router)
+app.include_router(rag_router)
+app.include_router(verification_router)
+app.include_router(pdf_router)
+
+# ── Health Check ───────────────────────────────────────────────────────
 @app.get("/health")
 async def health():
-    """Health check endpoint"""
     return {
         "status": "healthy",
         "service": "aceb-backend",

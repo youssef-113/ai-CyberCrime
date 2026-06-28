@@ -1,5 +1,5 @@
 """Verification Service (Attacker + Judge Agents) — Port 8004"""
 
-from .main import app
+from .main import router
 
-__all__ = ["app"]
+__all__ = ["router"]

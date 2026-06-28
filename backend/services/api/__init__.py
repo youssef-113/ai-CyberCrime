@@ -1,5 +1,5 @@
 """API Gateway Service — Port 8000"""
 
-from .main import app
+from .main import router, limiter
 
-__all__ = ["app"]
+__all__ = ["router", "limiter"]

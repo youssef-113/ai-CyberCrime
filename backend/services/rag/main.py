@@ -13,8 +13,7 @@ import time
 import logging
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 from .config import config
@@ -22,14 +21,7 @@ from .config import config
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("rag.main")
 
-app = FastAPI(title="RAG Service", version="2.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+router = APIRouter(prefix="/rag")
 
 
 class RetrieveRequest(BaseModel):
@@ -100,7 +92,7 @@ class FaithfulnessResponse(BaseModel):
     hallucination_risk: str
 
 
-@app.get("/health")
+@router.get("/health")
 def health():
     """
     Liveness + readiness probe.
@@ -150,7 +142,7 @@ def health():
     }
 
 
-@app.get("/stats")
+@router.get("/stats")
 def get_stats():
     from .cache import get_cache_stats
     from .observability import get_metrics_summary
@@ -177,7 +169,7 @@ def get_stats():
     }
 
 
-@app.post("/retrieve", response_model=RetrieveResponse)
+@router.post("/retrieve", response_model=RetrieveResponse)
 async def retrieve(request: RetrieveRequest):
     start_time = time.time()
     enhanced_query = f"{request.crime_type}: {request.query}" if request.crime_type else request.query
@@ -334,7 +326,7 @@ async def retrieve(request: RetrieveRequest):
     )
 
 
-@app.post("/index", response_model=IndexResponse)
+@router.post("/index", response_model=IndexResponse)
 async def index_articles(request: IndexRequest, background_tasks: BackgroundTasks):
     """Index law articles into ChromaDB."""
 
@@ -384,7 +376,7 @@ async def index_articles(request: IndexRequest, background_tasks: BackgroundTask
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/index/document")
+@router.post("/index/document")
 async def index_single_document(document: Dict[str, Any], tenant_id: str = "default"):
     """Index a single document into ChromaDB."""
 
@@ -399,7 +391,7 @@ async def index_single_document(document: Dict[str, Any], tenant_id: str = "defa
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/faithfulness", response_model=FaithfulnessResponse)
+@router.post("/faithfulness", response_model=FaithfulnessResponse)
 def check_faithfulness(request: FaithfulnessRequest):
     from .observability import check_faithfulness
 
@@ -417,7 +409,7 @@ def check_faithfulness(request: FaithfulnessRequest):
     )
 
 
-@app.get("/tenants")
+@router.get("/tenants")
 def list_tenants():
     """List all tenant namespaces in ChromaDB."""
 
@@ -458,7 +450,7 @@ def list_tenants():
         }
 
 
-@app.delete("/collections/{tenant_id}")
+@router.delete("/collections/{tenant_id}")
 async def delete_collection(tenant_id: str):
     """Delete a tenant's collection (admin only)."""
     if not config.multi_tenant.enabled:
@@ -487,7 +479,7 @@ class ValidateCitationsRequest(BaseModel):
     tenant_id: str = "default"
 
 
-@app.post("/validate-citations", response_model=CitationValidationResult)
+@router.post("/validate-citations", response_model=CitationValidationResult)
 async def validate_citations_endpoint(request: ValidateCitationsRequest):
     """Validate that cited articles exist in ChromaDB with matching crime_type."""
     from .citations import validate_citations
@@ -501,27 +493,4 @@ async def validate_citations_endpoint(request: ValidateCitationsRequest):
     return CitationValidationResult(**result)
 
 
-@app.on_event("startup")
-async def startup():
-    logger.info("RAG Service v2.0 starting...")
-    logger.info(f"  Vector DB: ChromaDB Cloud")
-    logger.info(f"  Chroma: {config.chroma.collection_name} @ tenant={config.chroma.cloud_tenant} db={config.chroma.cloud_database}")
-    logger.info(f"  Embedding model: {config.embedding.model_name}")
-    logger.info(f"  Chunk size: {config.chunking.chunk_size} tokens, overlap: {config.chunking.chunk_overlap}")
-    logger.info(f"  Reranker: {'enabled' if config.reranker.enabled else 'disabled'}")
-    logger.info(f"  Semantic cache: {'enabled' if config.cache.semantic_cache_enabled else 'disabled'}")
-    logger.info(f"  Multi-tenant: {'enabled' if config.multi_tenant.enabled else 'disabled'}")
-    logger.info(
-        f"  Query transforms: "
-        f"HyDE={'on' if config.query_transform.hyde_enabled else 'off'}, "
-        f"Fusion={'on' if config.query_transform.rag_fusion_enabled else 'off'}, "
-        f"Step-back={'on' if config.query_transform.step_back_enabled else 'off'}"
-    )
-    logger.info(f"  LLM Provider: {config.query_transform.llm_provider}")
-    logger.info(f"  Ollama: {config.ollama.model} @ {config.ollama.base_url}")
 
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8003)

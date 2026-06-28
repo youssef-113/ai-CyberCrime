@@ -4,21 +4,13 @@ import base64
 from typing import List, Optional
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
 from .generate import generate_complaint_pdf
 
-app = FastAPI(title="PDF Generator Service", version="1.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+router = APIRouter(prefix="/pdf")
 
 OUTPUTS_DIR = os.getenv("OUTPUTS_DIR", "/outputs")
 
@@ -35,7 +27,7 @@ class PDFRequest(BaseModel):
     language: str = "ar"
 
 
-@app.get("/health")
+@router.get("/health")
 def health():
     """
     Liveness + readiness probe.
@@ -73,7 +65,7 @@ def health():
     }
 
 
-@app.post("/generate")
+@router.post("/generate")
 async def generate_pdf(request: PDFRequest):
     try:
         pdf_bytes = generate_complaint_pdf(
@@ -109,7 +101,7 @@ async def generate_pdf(request: PDFRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/generate-download")
+@router.post("/generate-download")
 async def generate_pdf_download(request: PDFRequest):
     try:
         pdf_bytes = generate_complaint_pdf(
