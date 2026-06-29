@@ -89,7 +89,7 @@ export function useChat(caseContext, initialSessionId = null) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [sessionLoading, setSessionLoading] = useState(false)
-  const sessionIdRef = useRef(initialSessionId || authSessionId || `session_${Date.now()}`)
+  const sessionIdRef = useRef(initialSessionId || authSessionId || getCurrentSessionId() || `session_${Date.now()}`)
 
   // Sync with auth session when it becomes available
   useEffect(() => {
@@ -113,12 +113,11 @@ export function useChat(caseContext, initialSessionId = null) {
     try {
       const data = await endpoints.getChatHistory(sessionId)
       if (data.messages && data.messages.length > 0) {
-        // Convert to frontend format
         const loadedMessages = data.messages.map(msg => ({
           role: msg.role,
           content: msg.content,
           timestamp: msg.created_at || new Date().toISOString(),
-          citations: msg.citations ? JSON.parse(msg.citations) : undefined,
+          citations: msg.citations ? (typeof msg.citations === 'string' ? JSON.parse(msg.citations) : msg.citations) : undefined,
         }))
         setMessages(loadedMessages)
       }

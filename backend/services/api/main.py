@@ -7,6 +7,7 @@ import httpx
 import uuid
 import os
 import json
+import base64
 import logging
 import asyncio
 from datetime import datetime, timezone
@@ -164,7 +165,7 @@ limiter = Limiter(key_func=get_rate_limit_key)
 # /chat. The gateway therefore proxies to itself over HTTP. Defaults below
 # target the local monolith; docker-compose overrides them to the `backend`
 # service host so the celery worker (separate container) can reach the API too.
-_SELF = os.getenv("MONOLITH_BASE_URL", "https://cyber-crime-production.up.railway.app/")
+_SELF = os.getenv("MONOLITH_BASE_URL", "https://cyber-crime-production.up.railway.app")
 SERVICE_URLS = {
     "ocr": os.getenv("OCR_SERVICE_URL", f"{_SELF}/ocr"),
     "classifier": os.getenv("CLASSIFIER_SERVICE_URL", f"{_SELF}/classifier"),
@@ -192,6 +193,8 @@ class CaseStatus(BaseModel):
 class ClassifyRequest(BaseModel):
     text: str
     entities: Optional[dict] = {}
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 class RetrieveRequest(BaseModel):
@@ -200,6 +203,8 @@ class RetrieveRequest(BaseModel):
     top_k: int = 5
     tenant_id: str = "default"
     transform_strategy: str = "auto"
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 class FaithfulnessRequest(BaseModel):
@@ -212,6 +217,8 @@ class IndexRequest(BaseModel):
     articles: List[dict]
     tenant_id: str = "default"
     async_ingest: bool = False
+    user_id: Optional[str] = None
+    case_id: Optional[str] = None
 
 
 class ChatPdfTriggerRequest(BaseModel):
@@ -673,7 +680,8 @@ async def download_pdf(
     case_id: str,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Download generated PDF for case - user-scoped"""
+    """Download generated PDF for case - user-scoped.
+    Generates PDF on-demand if not already generated."""
     case = await get_case_by_id(case_id, user_id)
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
@@ -681,11 +689,52 @@ async def download_pdf(
     if case.get("status") != "completed":
         raise HTTPException(status_code=400, detail="PDF not ready yet")
 
-    pdf_path = f"/outputs/{case_id}.pdf"
-    if os.path.exists(pdf_path):
+    pdf_path = case.get("pdf_path")
+    if pdf_path and os.path.exists(pdf_path):
         return FileResponse(pdf_path, media_type="application/pdf")
 
-    raise HTTPException(status_code=404, detail="PDF not found")
+    result = case.get("result")
+    if not result:
+        raise HTTPException(status_code=404, detail="No result data to generate PDF")
+
+    try:
+        classification = result.get("classification", {})
+        verification = result.get("verification", {})
+
+        pdf_resp = await call_microservice(
+            "pdf",
+            "POST",
+            f"{SERVICE_URLS['pdf']}/generate",
+            json_payload={
+                "case_id": case_id,
+                "crime_type": classification.get("crime_type", "unknown"),
+                "evidence_summary": result.get("ocr", {}).get("avg_confidence", ""),
+                "timeline": result.get("timeline", verification.get("timeline", [])),
+                "law_articles": result.get("articles", []),
+                "score": result.get("score", {}).get("total_score", 0),
+                "grade": result.get("score", {}).get("grade", "C"),
+                "complainant_name": "",
+                "language": "ar",
+            },
+            timeout=60.0,
+        )
+        pdf_data = pdf_resp.json()
+
+        if pdf_data.get("status") == "generated" and pdf_data.get("path"):
+            from services.database.database import get_supabase
+            db = get_supabase()
+            db.table("cases").update({"pdf_path": pdf_data["path"]}).eq("case_id", case_id).execute()
+            pdf_bytes = base64.b64decode(pdf_data["pdf_base64"])
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f"attachment; filename={case_id}_complaint.pdf"},
+            )
+
+        raise HTTPException(status_code=500, detail="PDF generation failed")
+    except Exception as e:
+        logger.error(f"PDF generation failed for {case_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -1153,6 +1202,7 @@ async def reset_chat(
 @router.get("/chat/history")
 async def chat_history(
     session_id: str,
+    limit: int = 50,
     user_id: str = Depends(get_current_user_id),
 ):
     """Get chat history for a session - user-scoped."""
@@ -1163,7 +1213,7 @@ async def chat_history(
             raise HTTPException(status_code=404, detail="Session not found")
 
         messages = await get_chat_history(session_id)
-        return {"session_id": session_id, "messages": messages}
+        return {"session_id": session_id, "messages": messages[:limit] if limit else messages}
     except HTTPException:
         raise
     except Exception as e:
@@ -1370,6 +1420,8 @@ async def retrieve_articles(
                 "top_k": top_k,
                 "tenant_id": safe_tenant_id,
                 "transform_strategy": safe_transform_strategy,
+                "user_id": body.user_id or user_id,
+                "session_id": body.session_id,
             },
             timeout=30.0,
         )
@@ -1394,7 +1446,12 @@ async def classify_text(
             "classifier",
             "POST",
             f"{SERVICE_URLS['classifier']}/classify",
-            json_payload={"text": safe_text, "entities": safe_entities},
+            json_payload={
+                "text": safe_text,
+                "entities": safe_entities,
+                "user_id": body.user_id or user_id,
+                "session_id": body.session_id,
+            },
             timeout=30.0,
         )
         return resp.json()
@@ -1462,7 +1519,13 @@ async def index_articles(
             "rag",
             "POST",
             f"{SERVICE_URLS['rag']}/index",
-            json_payload={"articles": safe_articles, "tenant_id": safe_tenant_id, "async_ingest": request.async_ingest},
+            json_payload={
+                "articles": safe_articles,
+                "tenant_id": safe_tenant_id,
+                "async_ingest": body.async_ingest,
+                "user_id": body.user_id or user_id,
+                "case_id": body.case_id,
+            },
             timeout=60.0,
         )
         return resp.json()

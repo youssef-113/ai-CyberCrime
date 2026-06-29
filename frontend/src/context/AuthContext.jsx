@@ -209,14 +209,14 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     if (!auth.isDemo) {
       try {
-        await authApi.logout(auth.refreshToken)
+        await authApi.logout(auth.token)
       } catch {
         // Ignore logout API errors
       }
     }
     clearAuth()
     ActionAlerts.logoutSuccess()
-  }, [auth.isDemo, auth.refreshToken, clearAuth])
+  }, [auth.isDemo, auth.token, clearAuth])
 
   const refreshTokens = useCallback(async () => {
     if (!auth.refreshToken) {

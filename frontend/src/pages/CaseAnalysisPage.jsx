@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, FileImage, FileText, X, AlertCircle, CheckCircle2, Clock, Phone, User, DollarSign, Scale, Download, RotateCcw, ChevronRight, Eye, Cpu, ArrowRight } from 'lucide-react'
 import { Card, CardBody } from '../components/ui/Card'
@@ -6,6 +7,8 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import { ProgressBar, PipelineProgress, Spinner } from '../components/ui/ProgressIndicator'
 import { useAnalyze, usePdfDownload } from '../api/hooks'
+import { useCases } from '../api/hooks'
+import { getCaseById } from '../api/endpoints'
 import { VerificationSection } from '../components/verification'
 import { validateFile, validateFileList } from '../utils/validators'
 import { formatFileSize, getGradeInfo, getCrimeTypeInfo, scoreToColor, scoreToBgColor } from '../utils/formatters'
@@ -22,10 +25,13 @@ export default function CaseAnalysisPage() {
   const [dragActive, setDragActive] = useState(false)
   const [pipelineStep, setPipelineStep] = useState(-1)
   const [result, setResult] = useState(null)
+  const [caseLoading, setCaseLoading] = useState(false)
   const { analyze, loading, progress, stage, error } = useAnalyze()
   const { download, loading: downloading } = usePdfDownload()
   const { language, isRtl } = useTheme()
   const alerts = useAlerts()
+  const [searchParams] = useSearchParams()
+  const caseIdParam = searchParams.get('caseId')
   
   const t = (key) => getTranslation(language, key)
   const pipelineSteps = language === 'ar' ? PIPELINE_STEPS_AR : PIPELINE_STEPS_EN
@@ -99,6 +105,23 @@ export default function CaseAnalysisPage() {
       alerts.analysisFailed(error || 'Analysis failed')
     }
   }
+
+  useEffect(() => {
+    if (!caseIdParam) return
+    setCaseLoading(true)
+    getCaseById(caseIdParam)
+      .then((caseData) => {
+        const caseResult = caseData?.result
+        if (caseResult) {
+          caseResult.case_id = caseData.case_id
+          setResult(caseResult)
+        }
+      })
+      .catch((err) => {
+        alerts.error('Failed to load case', err.message)
+      })
+      .finally(() => setCaseLoading(false))
+  }, [caseIdParam])
 
   useEffect(() => {
     if (stage) {
