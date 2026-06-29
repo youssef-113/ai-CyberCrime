@@ -8,10 +8,11 @@ import Button from '../components/ui/Button'
 import { SkeletonCard } from '../components/ui/Skeleton'
 import { getGradeInfo, formatDateTime, getCrimeTypeInfo, formatCaseId } from '../utils/formatters'
 import { useCases } from '../api/hooks'
+import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { getTranslation } from '../utils/translations'
 
-const MOCK_CASES = [
+const DEMO_CASES = [
   {
     case_id: 'CASE_DEMO_001',
     created_at: '2024-01-15T10:30:00',
@@ -41,17 +42,17 @@ const MOCK_CASES = [
 export default function DashboardPage() {
   const { cases, fetchCases, loading, error } = useCases()
   const { language, isRtl } = useTheme()
+  const { isDemo } = useAuth()
   
   const t = (key) => getTranslation(language, key)
 
   useEffect(() => {
-    fetchCases().catch(() => {
-      // Silently fail and use mock data
-    })
+    fetchCases().catch(() => {})
   }, [fetchCases])
 
-  // Use mock data if API fails or no cases exist
-  const displayCases = cases.length > 0 ? cases : MOCK_CASES
+  const displayCases = cases.length > 0
+    ? cases
+    : (isDemo ? DEMO_CASES : [])
 
   const stats = {
     total: displayCases.length,
@@ -71,8 +72,7 @@ export default function DashboardPage() {
     )
   }
 
-  if (error && cases.length === 0 && !MOCK_CASES) {
-    // Only show error if we don't have mock data
+  if (error && cases.length === 0 && !isDemo) {
     return (
       <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
         <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">

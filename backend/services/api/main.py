@@ -1156,14 +1156,19 @@ async def chat_history(
     user_id: str = Depends(get_current_user_id),
 ):
     """Get chat history for a session - user-scoped."""
-    # Verify session belongs to user
-    sessions = await get_user_sessions(user_id)
-    user_session_ids = [s["session_id"] for s in sessions]
-    if session_id not in user_session_ids:
-        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        sessions = await get_user_sessions(user_id)
+        user_session_ids = [s["session_id"] for s in sessions]
+        if session_id not in user_session_ids:
+            raise HTTPException(status_code=404, detail="Session not found")
 
-    messages = await get_chat_history(session_id)
-    return {"session_id": session_id, "messages": messages}
+        messages = await get_chat_history(session_id)
+        return {"session_id": session_id, "messages": messages}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Chat history failed for session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve chat history")
 
 
 # ══════════════════════════════════════════════════════════════════════════

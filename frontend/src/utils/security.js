@@ -233,6 +233,10 @@ export function truncateString(str, maxLength = 8000) {
  * Comprehensive input sanitization for API requests
  */
 export function sanitizeAPIRequest(data) {
+  if (data instanceof FormData) {
+    return data
+  }
+
   if (typeof data === 'string') {
     return truncateString(escapeHTML(data))
   }
