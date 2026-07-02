@@ -165,7 +165,7 @@ export default function DashboardPage() {
                       <Badge variant={crimeInfo.color}>{language === 'ar' ? crimeInfo.ar : crimeInfo.en}</Badge>
                     </div>
                     <p className="text-xs text-neutral-500 mt-0.5">
-                      {formatDateTime(caseItem.created_at)} · {caseItem.files_processed || 0} {t('common.files')}
+                      {formatDateTime(caseItem.created_at)} · {caseItem.files_processed || caseItem.files_count || 0} {t('common.files')}
                     </p>
                   </div>
                 </div>

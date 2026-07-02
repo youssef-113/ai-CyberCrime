@@ -668,12 +668,43 @@ async def get_case(
         case["stage"] = progress.get("stage", case.get("stage"))
         case["result"] = progress.get("result", case.get("result"))
         case["updated_at"] = progress.get("updated_at", case.get("updated_at"))
+
+    result = case.get("result")
+    if result:
+        if isinstance(result, str):
+            try:
+                result = json.loads(result)
+                case["result"] = result
+            except (json.JSONDecodeError, TypeError):
+                result = None
+        if isinstance(result, dict):
+            for key in ("classification", "score", "verification", "ocr", "articles",
+                        "entities", "rag_meta", "timeline", "pipeline_status",
+                        "files_processed", "ocr_confidence"):
+                if key in result:
+                    case[key] = result[key]
     return case
 
 @router.get("/cases")
 async def list_cases(user_id: str = Depends(get_current_user_id)):
     """List all cases for the current user"""
-    return await get_user_cases(user_id)
+    raw_cases = await get_user_cases(user_id)
+    for c in raw_cases:
+        result = c.get("result")
+        if result:
+            if isinstance(result, str):
+                try:
+                    result = json.loads(result)
+                    c["result"] = result
+                except (json.JSONDecodeError, TypeError):
+                    continue
+            if isinstance(result, dict):
+                for key in ("classification", "score", "verification", "ocr", "articles",
+                            "entities", "rag_meta", "timeline", "pipeline_status",
+                            "files_processed", "ocr_confidence"):
+                    if key in result:
+                        c[key] = result[key]
+    return raw_cases
 
 @router.get("/pdf/{case_id}")
 async def download_pdf(
@@ -1718,9 +1749,10 @@ async def run_pipeline(case_id: str, files: List[UploadFile], user_id: str = "de
     classification = {
         "crime_type": "unknown",
         "confidence": 0.0,
-        "reasoning": "Classification service unavailable",
+        "reasoning": "No readable text extracted from uploaded evidence",
         "suggested_articles": [],
-        "missing_evidence": [],
+        "missing_evidence": ["Upload a clearer image or PDF with legible text"],
+        "classifier_notes": "OCR returned no usable text",
     }
     if combined_text:
         try:
@@ -1786,7 +1818,7 @@ async def run_pipeline(case_id: str, files: List[UploadFile], user_id: str = "de
         "status": "NEEDS_USER_REVIEW",
         "rounds": 0,
         "final_score": 0,
-        "score_breakdown": {"grade": "WEAK"},
+        "score_breakdown": {"grade": "WEAK", "explicit_threat_found": 0, "financial_demand_found": 0, "contact_identified": 0, "multiple_evidence_files": 0, "ocr_confidence_high": 0, "law_articles_retrieved": 0, "date_timestamp_found": 0},
         "timeline": [],
         "details": [],
         "missing_evidence": classification.get("missing_evidence", []),

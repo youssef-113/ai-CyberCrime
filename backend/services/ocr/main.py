@@ -162,9 +162,42 @@ async def _ocr_process(content: bytes, filename: str, block_id: str = "E001") ->
             timeout=OCR_TIMEOUT,
         )
     except asyncio.TimeoutError:
-        raise HTTPException(
-            status_code=408,
-            detail=f"OCR timed out after {OCR_TIMEOUT}s",
+        logger.warning("OCR timed out for %s — returning empty result", filename)
+        return OCRResponse(
+            evidence_blocks=[],
+            entities=EntityCollection(),
+            full_text="",
+            normalized_text="",
+            avg_confidence=0.0,
+            language="unknown",
+            processing_metadata={
+                "processing_time_ms": 0.0,
+                "engine_used": "none",
+                "fallback_triggered": False,
+                "blocks_count": 0,
+                "threat_indicators": [],
+                "threat_score": 0,
+                "confidence_score": None,
+            },
+        )
+    except Exception as exc:
+        logger.warning("OCR processing failed for %s: %s", filename, exc)
+        return OCRResponse(
+            evidence_blocks=[],
+            entities=EntityCollection(),
+            full_text="",
+            normalized_text="",
+            avg_confidence=0.0,
+            language="unknown",
+            processing_metadata={
+                "processing_time_ms": 0.0,
+                "engine_used": "none",
+                "fallback_triggered": False,
+                "blocks_count": 0,
+                "threat_indicators": [],
+                "threat_score": 0,
+                "confidence_score": None,
+            },
         )
 
     # ── Entity extraction ─────────────────────────────────────────────────

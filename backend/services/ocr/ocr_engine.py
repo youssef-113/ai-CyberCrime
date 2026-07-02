@@ -54,7 +54,11 @@ except ImportError:
 
 from .arabic_utils import detect_language, normalize_arabic_text
 from .models import ConfidenceScore, EvidenceBlock, OCRResult
-from .preprocessing import preprocess_image
+try:
+    from .preprocessing import preprocess_image
+except Exception as exc:  # pragma: no cover - dependency guard
+    logger.warning("Preprocessing import failed: %s", exc)
+    preprocess_image = None
 
 # ── Confidence thresholds ──────────────────────────────────────────────────
 CHANDRA_CONFIDENCE_THRESHOLD = 0.85   # below → try PaddleOCR
@@ -427,18 +431,22 @@ class OCREngine:
         self.metrics["avg_latency_ms"] = self.metrics["_latency_sum"] / n
         return result
 
-    def _prepare_image(self, image_bytes: bytes) -> np.ndarray:
-        if self.config.use_preprocessing:
+    def _prepare_image(self, image_bytes: bytes):
+        if self.config.use_preprocessing and preprocess_image is not None:
             try:
                 return preprocess_image(image_bytes, self.config.target_width)
             except Exception as exc:
                 logger.warning("Preprocessing failed (%s) — using raw bytes", exc)
 
-        import cv2
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        img   = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if img is not None:
-            return img
+        try:
+            import cv2
+            nparr = np.frombuffer(image_bytes, np.uint8)
+            img   = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img is not None:
+                return img
+        except Exception as exc:
+            logger.warning("Image decode fallback failed (%s) — returning empty result", exc)
+
         raise ValueError("Cannot decode image bytes — corrupt or unsupported format")
 
     # ── Chandra OCR 2 ─────────────────────────────────────────────────────

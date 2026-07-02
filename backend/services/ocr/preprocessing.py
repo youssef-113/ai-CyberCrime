@@ -1,18 +1,29 @@
-"""Image preprocessing for Arabic OCR optimization
+"""Image preprocessing for Arabic OCR optimization.
 
-Critical for Arabic text recognition:
-- Arabic letters are connected → preprocessing is essential
-- Resize is very important for Arabic script
-- Grayscale reduces noise
-- Contrast enhancement improves character separation
+This module is optional at runtime. If OpenCV or Pillow is unavailable,
+we fall back to a simple byte-based placeholder so the OCR service can
+still return a graceful empty result instead of crashing the pipeline.
 """
-import cv2
-import numpy as np
-from PIL import Image
-from typing import Tuple, Optional
+
+from typing import Optional, Tuple
+
+try:
+    import cv2  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - exercised in tests
+    cv2 = None
+
+try:
+    import numpy as np
+except ModuleNotFoundError:  # pragma: no cover - exercised in tests
+    np = None
+
+try:
+    from PIL import Image  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - exercised in tests
+    Image = None
 
 
-def preprocess_image(image_bytes: bytes, target_width: int = 800) -> np.ndarray:
+def preprocess_image(image_bytes: bytes, target_width: int = 800):
     """
     Full preprocessing pipeline for Arabic OCR
     
@@ -30,6 +41,9 @@ def preprocess_image(image_bytes: bytes, target_width: int = 800) -> np.ndarray:
     Returns:
         Preprocessed numpy array ready for OCR
     """
+    if cv2 is None or np is None:
+        return np.zeros((1, 1, 3), dtype=np.uint8) if np is not None else None
+
     # Convert bytes to numpy array
     nparr = np.frombuffer(image_bytes, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -55,14 +69,16 @@ def preprocess_image(image_bytes: bytes, target_width: int = 800) -> np.ndarray:
     return thresholded
 
 
-def convert_to_grayscale(image: np.ndarray) -> np.ndarray:
+def convert_to_grayscale(image):
     """Convert image to grayscale"""
+    if cv2 is None:
+        return image
     if len(image.shape) == 3:
         return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     return image
 
 
-def resize_for_arabic(image: np.ndarray, target_width: int = 800) -> np.ndarray:
+def resize_for_arabic(image, target_width: int = 800):
     """
     Resize image maintaining aspect ratio
     
@@ -87,7 +103,7 @@ def resize_for_arabic(image: np.ndarray, target_width: int = 800) -> np.ndarray:
     return resized
 
 
-def enhance_contrast(image: np.ndarray) -> np.ndarray:
+def enhance_contrast(image):
     """
     Enhance contrast using CLAHE (Contrast Limited Adaptive Histogram Equalization)
     
@@ -97,12 +113,12 @@ def enhance_contrast(image: np.ndarray) -> np.ndarray:
     return clahe.apply(image)
 
 
-def denoise_image(image: np.ndarray) -> np.ndarray:
+def denoise_image(image):
     """Remove noise while preserving edges"""
     return cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
 
 
-def apply_threshold(image: np.ndarray, method: str = "adaptive") -> np.ndarray:
+def apply_threshold(image, method: str = "adaptive"):
     """
     Apply thresholding to create binary image
     
@@ -123,7 +139,7 @@ def apply_threshold(image: np.ndarray, method: str = "adaptive") -> np.ndarray:
     return thresh
 
 
-def deskew_image(image: np.ndarray) -> np.ndarray:
+def deskew_image(image):
     """
     Correct image skew/rotation
     
@@ -166,7 +182,7 @@ def deskew_image(image: np.ndarray) -> np.ndarray:
     return image
 
 
-def preprocess_for_display(image: np.ndarray) -> np.ndarray:
+def preprocess_for_display(image):
     """
     Preprocess image for visualization/debugging
     Returns RGB image
