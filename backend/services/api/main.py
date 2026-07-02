@@ -45,6 +45,17 @@ logger = logging.getLogger("api.gateway")
 case_progress_store = {}
 
 
+def normalize_case_result(result: Any) -> Optional[Dict[str, Any]]:
+    """Return a dict payload for case results stored as JSON strings or dicts."""
+    if isinstance(result, str):
+        try:
+            parsed = json.loads(result)
+        except (json.JSONDecodeError, TypeError):
+            return None
+        return parsed if isinstance(parsed, dict) else None
+    return result if isinstance(result, dict) else None
+
+
 def get_rate_limit_key(request: Request) -> str:
     token = request.headers.get("Authorization", "")
     if token.lower().startswith("bearer "):
@@ -669,20 +680,14 @@ async def get_case(
         case["result"] = progress.get("result", case.get("result"))
         case["updated_at"] = progress.get("updated_at", case.get("updated_at"))
 
-    result = case.get("result")
-    if result:
-        if isinstance(result, str):
-            try:
-                result = json.loads(result)
-                case["result"] = result
-            except (json.JSONDecodeError, TypeError):
-                result = None
-        if isinstance(result, dict):
-            for key in ("classification", "score", "verification", "ocr", "articles",
-                        "entities", "rag_meta", "timeline", "pipeline_status",
-                        "files_processed", "ocr_confidence"):
-                if key in result:
-                    case[key] = result[key]
+    result = normalize_case_result(case.get("result"))
+    if result is not None:
+        case["result"] = result
+        for key in ("classification", "score", "verification", "ocr", "articles",
+                    "entities", "rag_meta", "timeline", "pipeline_status",
+                    "files_processed", "ocr_confidence"):
+            if key in result:
+                case[key] = result[key]
     return case
 
 @router.get("/cases")
@@ -690,20 +695,14 @@ async def list_cases(user_id: str = Depends(get_current_user_id)):
     """List all cases for the current user"""
     raw_cases = await get_user_cases(user_id)
     for c in raw_cases:
-        result = c.get("result")
-        if result:
-            if isinstance(result, str):
-                try:
-                    result = json.loads(result)
-                    c["result"] = result
-                except (json.JSONDecodeError, TypeError):
-                    continue
-            if isinstance(result, dict):
-                for key in ("classification", "score", "verification", "ocr", "articles",
-                            "entities", "rag_meta", "timeline", "pipeline_status",
-                            "files_processed", "ocr_confidence"):
-                    if key in result:
-                        c[key] = result[key]
+        result = normalize_case_result(c.get("result"))
+        if result is not None:
+            c["result"] = result
+            for key in ("classification", "score", "verification", "ocr", "articles",
+                        "entities", "rag_meta", "timeline", "pipeline_status",
+                        "files_processed", "ocr_confidence"):
+                if key in result:
+                    c[key] = result[key]
     return raw_cases
 
 @router.get("/pdf/{case_id}")
@@ -724,7 +723,7 @@ async def download_pdf(
     if pdf_path and os.path.exists(pdf_path):
         return FileResponse(pdf_path, media_type="application/pdf")
 
-    result = case.get("result")
+    result = normalize_case_result(case.get("result"))
     if not result:
         raise HTTPException(status_code=404, detail="No result data to generate PDF")
 
