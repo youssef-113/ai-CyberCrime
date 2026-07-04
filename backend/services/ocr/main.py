@@ -140,6 +140,12 @@ async def _ocr_process(content: bytes, filename: str, block_id: str = "E001") ->
     _ensure_engine()
 
     mime = _validate_file(content, filename)
+    print("=" * 60)
+    print("OCR DEBUG")
+    print("Filename:", filename)
+    print("Size:", len(content))
+    print("Mime:", mime)
+    print("=" * 60)    
     start = time.perf_counter()
 
     # ── Text files: bypass OCR ────────────────────────────────────────────
@@ -161,6 +167,14 @@ async def _ocr_process(content: bytes, filename: str, block_id: str = "E001") ->
             ),
             timeout=OCR_TIMEOUT,
         )
+        print("=" * 60)
+        print("OCR RESULT")
+        print("Engine:", ocr_result.engine)
+        print("Confidence:", ocr_result.confidence)
+        print("Text:")
+        print(repr(ocr_result.text))
+        print("Blocks:", len(ocr_result.blocks))
+        print("=" * 60)
     except asyncio.TimeoutError:
         logger.warning("OCR timed out for %s — returning empty result", filename)
         return OCRResponse(
