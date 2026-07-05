@@ -61,15 +61,25 @@ def rerank(
         return results
 
     try:
+        original_scores = [r.combined_score for r in results]
+
         # Build query-document pairs for cross-encoder
         pairs = [(query, r.text) for r in results]
 
         # Cross-encoder scoring
         scores = model.predict(pairs, show_progress_bar=False)
 
-        # Assign reranker scores (normalized to [0,1] via sigmoid) and re-sort
+        reranker_scores = [_sigmoid(float(s)) for s in scores]
+        score_range = max(reranker_scores) - min(reranker_scores)
+
+        if score_range < 0.01:
+            logger.debug("Reranker scores not discriminative, preserving original scores")
+            for i, result in enumerate(results):
+                result.combined_score = original_scores[i]
+            return results[:top_n]
+
         for i, result in enumerate(results):
-            result.combined_score = _sigmoid(float(scores[i]))
+            result.combined_score = reranker_scores[i]
 
         results.sort(key=lambda r: r.combined_score, reverse=True)
 
