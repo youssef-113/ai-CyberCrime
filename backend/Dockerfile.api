@@ -1,8 +1,7 @@
 FROM python:3.11-slim
 
-# HF_TOKEN — mounted as BuildKit secret during build, never persisted in image
-# Use: --secret id=hf_token when building
-# Or mount from env: --secret id=hf_token,env=HF_TOKEN
+# HF_TOKEN read from .env at build time for authenticated model download
+ARG HF_TOKEN
 
 WORKDIR /app
 
@@ -38,11 +37,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements-api.txt
 
 # ── Pre-download embedding model (avoids download on first request) ──
-# Mount HF_TOKEN as BuildKit secret for authenticated download.
-# Falls back to unauthenticated if secret not provided.
-RUN --mount=type=secret,id=hf_token \
-    export HF_TOKEN=$(cat /run/secrets/hf_token 2>/dev/null) && \
-    python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')" 2>&1
+# Pass HF_TOKEN as --build-arg for authenticated download.
+# Falls back to unauthenticated if HF_TOKEN is empty.
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')" 2>&1
 
 # ── Application Code ──
 COPY . .
