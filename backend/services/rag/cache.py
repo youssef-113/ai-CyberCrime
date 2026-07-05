@@ -83,9 +83,14 @@ def _get_faiss_index():
     return _faiss_index
 
 
+def _cache_version() -> str:
+    return os.getenv("CACHE_VERSION", "v1")
+
+
 def _query_hash(query: str, tenant_id: str = "default") -> str:
     normalized = query.strip().lower()
-    return f"rag:cache:{tenant_id}:{hashlib.md5(normalized.encode()).hexdigest()}"
+    version = _cache_version()
+    return f"rag:cache:{tenant_id}:{version}:{hashlib.md5(normalized.encode()).hexdigest()}"
 
 
 class CacheHit:
