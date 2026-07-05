@@ -15,7 +15,7 @@ class ChromaConfig:
 
 @dataclass
 class EmbeddingConfig:
-    model_name: str = os.getenv("EMBEDDING_MODEL", "intfloat/multilingual-e5-small")
+    model_name: str = os.getenv("EMBEDDING_MODEL_NAME", "intfloat/multilingual-e5-small")
     query_prefix: str = os.getenv("EMBEDDING_QUERY_PREFIX", "query: ")
     passage_prefix: str = os.getenv("EMBEDDING_PASSAGE_PREFIX", "passage: ")
     content_addressable: bool = True

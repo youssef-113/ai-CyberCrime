@@ -122,7 +122,7 @@ async def warmup_models():
     try:
         import asyncio
         from sentence_transformers import SentenceTransformer
-        model_name = os.getenv("EMBEDDING_MODEL", "intfloat/multilingual-e5-small")
+        model_name = os.getenv("EMBEDDING_MODEL_NAME", "intfloat/multilingual-e5-small")
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, lambda: SentenceTransformer(model_name))
         logger.info(f"Embedding model warmed up: {model_name}")
