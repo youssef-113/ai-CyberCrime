@@ -41,9 +41,9 @@ The OCR Service extracts text and structured entities from uploaded evidence fil
                 │  1. Preprocess (grayscale → CLAHE      │
                 │     → denoise → adaptive threshold)     │
                 │                                        │
-                │  2. Chandra OCR 2 (primary)            │
-                │     └─ conf ≥ 0.85 → ACCEPT            │
-                │     └─ conf < 0.85 → PaddleOCR         │
+                │  2. Groq Vision API (primary)            │
+                │     └─ conf ≥ 0.90 → ACCEPT            │
+                │     └─ conf < 0.90 → PaddleOCR         │
                 │                                        │
                 │  3. PaddleOCR (fallback)               │
                 │     └─ conf ≥ 0.80 → ACCEPT            │
@@ -101,16 +101,16 @@ The OCR Service extracts text and structured entities from uploaded evidence fil
 
 ## 3-Tier OCR Engine
 
-### Tier 1: Chandra OCR 2 (Primary)
+### Tier 1: Groq Vision API (Primary)
 
-- **Role:** Primary OCR reader for Arabic script
-- **Confidence threshold:** 0.85 (configurable via `CHANDRA_CONFIDENCE_THRESHOLD`)
-- **Languages:** `["ar", "en"]`
-- **Behavior:** If weighted-average confidence ≥ 0.85, result is accepted immediately. No fallback invoked.
+- **Role:** Primary OCR reader via Groq Vision API (Llama 4 Scout / Gemma 4 vision)
+- **Confidence threshold:** 0.90 (configurable via `GROQ_VISION_CONFIDENCE`)
+- **Model:** `meta-llama/llama-4-scout-17b-16e-instruct` (configurable via `GROQ_VISION_MODEL`)
+- **Behavior:** If weighted-average confidence ≥ 0.90, result is accepted immediately. No fallback invoked.
 
 ### Tier 2: PaddleOCR (Fallback)
 
-- **Role:** Fallback when Chandra confidence is low
+- **Role:** Fallback when Groq Vision confidence is low
 - **Confidence threshold:** 0.80 (configurable via `PADDLE_CONFIDENCE_THRESHOLD`)
 - **Language:** `"ar"`
 - **Behavior:** If PaddleOCR confidence ≥ 0.80, result is accepted. Else, proceeds to Groq layer.
@@ -263,7 +263,7 @@ OCRResponse
 | `OCR_TIMEOUT` | 30s | Per-image processing timeout |
 | `OCR_CACHE_ENABLED` | true | Enable Redis caching |
 | `OCR_CACHE_TTL` | 3600 | Cache TTL in seconds |
-| `CHANDRA_CONFIDENCE_THRESHOLD` | 0.85 | Chandra OCR min confidence |
+| `GROQ_VISION_CONFIDENCE` | 0.90 | Groq Vision API min confidence |
 | `PADDLE_CONFIDENCE_THRESHOLD` | 0.80 | PaddleOCR min confidence |
 | `GROQ_API_KEY` | — | Groq API key |
 | `GROQ_MODEL` | `llama-3.3-70b-versatile` | Groq LLM model |
@@ -321,7 +321,7 @@ Exported at `GET /ocr/metrics`:
 | Metric | Type | Description |
 |--------|------|-------------|
 | total_requests | Counter | Total OCR requests |
-| chandra_used | Counter | Chandra OCR 2 accepted results |
+| groq_vision_used | Counter | Groq Vision API accepted results |
 | paddle_used | Counter | PaddleOCR accepted results |
 | groq_used | Counter | Groq layer invocations |
 | errors | Counter | Pipeline errors |

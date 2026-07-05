@@ -14,7 +14,7 @@ Users upload digital evidence (chat screenshots, PDFs, images). The system extra
 ## Features
 
 - **Multi-format Evidence Upload** — Images (PNG/JPEG/WebP/TIFF), PDFs, TXT files
-- **AI-Powered OCR** — Chandra OCR 2 (primary) + PaddleOCR (fallback) + Groq understanding layer
+- **AI-Powered OCR** — Groq Vision API (primary) + PaddleOCR (fallback) + Groq understanding layer
 - **Arabic Text Normalization** — Diacritic removal, Alef unification, OCR error correction
 - **Entity Extraction** — Phone numbers, financial amounts, dates, emails, URLs, IBANs
 - **Automated Crime Classification** — LLM-based detection of blackmail, scam, threat, defamation
@@ -56,7 +56,7 @@ Infrastructure: Redis (cache + Celery broker), Ollama (local LLM), Docker Compos
 | Backend       | Python 3.11, FastAPI, Celery                    |
 | Database      | Supabase PostgreSQL (primary), ChromaDB (vector)|
 | LLM           | Ollama (qwen2.5:3b — primary), Groq (cloud fallback) |
-| OCR           | Chandra OCR 2 (primary), PaddleOCR (fallback)   |
+| OCR           | Groq Vision API (primary), PaddleOCR (fallback)   |
 | Cache/Queue   | Redis (cache DB 0, Celery broker DB 1, backend DB 2) |
 | PDF           | WeasyPrint + Jinja2 (Arabic RTL support)        |
 | Container     | Docker + Docker Compose                         |
@@ -133,7 +133,7 @@ npm run build
 ```
 Upload (images, PDFs, TXT)
   ↓
-Chandra OCR 2 (primary OCR engine)
+Groq Vision API (primary OCR engine)
   ↓
 PaddleOCR (fallback on low confidence)
   ↓

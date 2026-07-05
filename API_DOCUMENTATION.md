@@ -836,7 +836,7 @@ Extract text and entities from a single file.
 ```json
 {
   "evidence_blocks": [
-    { "block_id": "E001", "file_name": "evidence.jpg", "raw_text": "...", "normalized_text": "...", "confidence": 0.95, "quality_flag": "OK", "ocr_source": "chandra", "bbox": null }
+    { "block_id": "E001", "file_name": "evidence.jpg", "raw_text": "...", "normalized_text": "...", "confidence": 0.95, "quality_flag": "OK", "ocr_source": "groq_vision", "bbox": null }
   ],
   "entities": { "phones": ["+201234567890"], "amounts": ["1000 EGP"] },
   "full_text": "Extracted text...",
@@ -845,7 +845,7 @@ Extract text and entities from a single file.
   "language": "ar",
   "processing_metadata": {
     "processing_time_ms": 1500.5,
-    "engine_used": "chandra",
+    "engine_used": "groq_vision",
     "fallback_triggered": false,
     "blocks_count": 3,
     "threat_indicators": [],
@@ -1048,7 +1048,7 @@ Liveness + readiness probe.
   "service": "ocr",
   "version": "2.0.0",
   "engine_ready": true,
-  "engines": {"chandra": true, "paddle": true, "groq": true},
+  "engines": {"groq_vision": true, "paddle": true, "groq": true},
   "redis": "connected",
   "celery": "connected",
   "limits": { "max_file_size_mb": 10, "max_image_px": 8000, "max_pdf_pages": 20, "ocr_timeout_s": 30 }

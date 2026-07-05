@@ -39,7 +39,7 @@
 │ Database:      Supabase PostgreSQL                           │
 │ Vector Store:  ChromaDB                                      │
 │ LLM:           Ollama (primary) + Groq (cloud fallback)      │
-│ OCR:           Chandra OCR 2 (primary) + PaddleOCR (fallback)│
+│ OCR:           Groq Vision API (primary) + PaddleOCR (fallback)│
 │ Cache:         Redis                                         │
 │ Async Tasks:   Celery + Redis                                │
 │ Container:     Docker + Docker Compose                       │
@@ -86,7 +86,7 @@ ai-CyberCrime/
 │   │   │
 │   │   ├── ocr/                    # OCR Service (mounted at /ocr)
 │   │   │   ├── main.py             # Endpoints: extract, batch, async jobs
-│   │   │   ├── ocr_engine.py       # Chandra OCR 2 → PaddleOCR → Groq
+│   │   │   ├── ocr_engine.py       # Groq Vision API → PaddleOCR → Groq
 │   │   │   ├── preprocessing.py    # Image enhancement
 │   │   │   ├── arabic_utils.py     # Arabic normalization
 │   │   │   ├── entities.py         # Entity extraction
@@ -269,7 +269,7 @@ graph TB
 
     Gateway -->|Auth| Supabase["Supabase PostgreSQL<br/>Users, Cases, Sessions"]
 
-    Gateway -->|HTTP proxy| OCR["OCR Service<br/>(mounted at /ocr)<br/>Chandra OCR 2 + PaddleOCR"]
+    Gateway -->|HTTP proxy| OCR["OCR Service<br/>(mounted at /ocr)<br/>Groq Vision API + PaddleOCR"]
 
     OCR -->|LLM Call| Groq["Groq LLM<br/>(OCR understanding layer)"]
 
@@ -359,7 +359,7 @@ User Uploads Evidence Files
         ↓
    ┌────────────────────────────────────┐
    │ Stage 1: OCR + Entity Extraction    │
-   │ - Chandra OCR 2 (primary)           │
+    │ - Groq Vision API (primary)         │
    │ - PaddleOCR (fallback on low conf)  │
    │ - Groq understanding layer          │
    │ - Arabic text normalization         │
@@ -509,7 +509,7 @@ App.jsx
 ### 5.2 OCR Service (`/ocr`)
 
 **Source:** `backend/services/ocr/main.py`
-**Engine:** Chandra OCR 2 (primary) → PaddleOCR (fallback) → Groq AI (understanding layer)
+**Engine:** Groq Vision API (primary) → PaddleOCR (fallback) → Groq AI (understanding layer)
 
 **Pipeline:**
 ```
@@ -520,7 +520,7 @@ Validate: magic bytes, size, MIME type
 (If TXT) → bypass OCR, decode UTF-8
 (If Image/PDF)
     ├─ Preprocess: grayscale → contrast → normalize size
-    ├─ Chandra OCR 2 (primary, threshold ≥ 0.85)
+    ├─ Groq Vision API (primary, threshold ≥ 0.90)
     │   └─ Confidence below threshold → PaddleOCR fallback
     ├─ Extract text blocks with confidence scores
     └─ Groq AI understanding layer (entity enhancement)
@@ -831,7 +831,7 @@ Key environment variables (see `.env.example` for full list):
 | `CORS_ORIGINS`                | Allowed CORS origins                 | `http://localhost:3000`   |
 | `VITE_API_URL`                | Frontend API base URL                | `https://cyber-crime-production.up.railway.app/`   |
 | `AUTH_DISABLED`               | Skip auth checks (dev only)          | `false`                   |
-| `CHANDRA_CONFIDENCE_THRESHOLD`| Chandra OCR min confidence           | `0.85`                    |
+| `GROQ_VISION_CONFIDENCE`     | Groq Vision API min confidence       | `0.90`                    |
 | `PADDLE_CONFIDENCE_THRESHOLD` | PaddleOCR min confidence             | `0.80`                    |
 | `MAX_FILE_SIZE_BYTES`         | Max upload file size                 | `10485760` (10 MB)        |
 | `MAX_PDF_PAGES`               | Max PDF pages for OCR                | `20`                      |
@@ -844,7 +844,7 @@ Key environment variables (see `.env.example` for full list):
 ```
 Upload
   ↓
-Chandra OCR 2 (primary OCR engine)
+Groq Vision API (primary OCR engine)
   ↓
 PaddleOCR (fallback on low confidence)
   ↓
