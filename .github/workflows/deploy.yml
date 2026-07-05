@@ -49,8 +49,8 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_BACKEND }}:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_BACKEND }}:latest
-          build-args: |
-            HF_TOKEN=${{ secrets.HF_TOKEN }}
+          secrets: |
+            hf_token=${{ secrets.HF_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

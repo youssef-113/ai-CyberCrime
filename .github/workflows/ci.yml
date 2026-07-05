@@ -52,7 +52,7 @@ jobs:
       - uses: docker/setup-buildx-action@v3
 
       - name: Build backend image
-        run: docker build --build-arg HF_TOKEN=${{ secrets.HF_TOKEN }} -t aceb-backend:ci -f backend/Dockerfile.api backend
+        run: docker build --secret id=hf_token,env=HF_TOKEN -t aceb-backend:ci -f backend/Dockerfile.api backend
 
       - name: Save backend image
         run: docker save aceb-backend:ci | gzip > /tmp/backend.tar.gz

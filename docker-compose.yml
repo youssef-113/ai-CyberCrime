@@ -1,3 +1,7 @@
+secrets:
+  hf_token:
+    environment: HF_TOKEN
+
 services:
 
   # ══════════════════════════════════════════════════════════════════════════
@@ -7,8 +11,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.api
-      args:
-        - HF_TOKEN=${HF_TOKEN}
+      secrets:
+        - hf_token
     ports:
       - "8000:8000"
     env_file: .env
