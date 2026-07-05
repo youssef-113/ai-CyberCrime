@@ -298,7 +298,6 @@ class OCREngine:
                 self._paddle = PaddleOCR(
                     use_angle_cls=True,
                     lang=self.config.paddleocr_lang,
-                    show_log=False,
                 )
                 logger.info("PaddleOCR ready")
             except Exception as exc:
