@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import {
   Shield, Upload, Cpu, Scale, FileText, MessageSquare,
@@ -175,8 +175,12 @@ function TypingAnimation({ phraseKeys, language, getTranslation }) {
 
 export default function LandingPage() {
   const { language, isRtl } = useTheme()
-  const { loginAsDemo } = useAuth()
+  const { loginAsDemo, isAuthenticated } = useAuth()
   const navigate = useNavigate()
+
+  // Redirect authenticated users to dashboard (prevents back-button from showing landing page)
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />
+
   const heroRef = useRef(null)
 
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] })

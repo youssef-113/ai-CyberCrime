@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Shield, Eye, EyeOff, ArrowRight, ArrowLeft, Zap } from 'lucide-react'
 import Button from '../components/ui/Button'
@@ -14,9 +14,14 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const { login, loginAsDemo, loading } = useAuth()
+  const { login, loginAsDemo, loading, isAuthenticated } = useAuth()
   const { language, isRtl } = useTheme()
   const navigate = useNavigate()
+
+  // Already logged in? Redirect to dashboard and replace history entry
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />
+  }
 
   const t = (key) => getTranslation(language, key)
 

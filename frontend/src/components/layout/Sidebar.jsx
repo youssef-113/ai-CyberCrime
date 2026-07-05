@@ -1,12 +1,11 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, Search, LayoutDashboard, MessageSquare, Settings, FileText, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
+import { Search, LayoutDashboard, MessageSquare, Settings, FileText, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
 import { getTranslation } from '../../utils/translations'
 import clsx from 'clsx'
 
 const navItems = [
-  { path: '/', icon: Home, labelKey: 'nav.home' },
   { path: '/dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard' },
   { path: '/analyze', icon: Search, labelKey: 'nav.newCase' },
   { path: '/history', icon: FileText, labelKey: 'nav.caseHistory' },
