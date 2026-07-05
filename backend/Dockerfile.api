@@ -1,5 +1,8 @@
 FROM python:3.11-slim
 
+# HF_TOKEN build arg — used only during build for model pre-download (not persisted in image)
+ARG HF_TOKEN
+
 WORKDIR /app
 
 # ── System Dependencies (minimum required at import time) ──
@@ -34,8 +37,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements-api.txt
 
 # ── Pre-download embedding model (avoids download on first request) ──
-# Falls back gracefully if network is unavailable during build.
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')" 2>&1 || echo "Model pre-download skipped (will download at runtime)"
+# Requires HF_TOKEN build arg for authenticated download (faster rate limits).
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')" 2>&1
 
 # ── Application Code ──
 COPY . .
