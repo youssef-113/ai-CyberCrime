@@ -369,7 +369,10 @@ async def index_articles(request: IndexRequest, background_tasks: BackgroundTask
     try:
         from .ingestion import index_articles as ingest_articles
 
-        result = ingest_articles(request.articles, request.tenant_id)
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, ingest_articles, request.articles, request.tenant_id
+        )
 
         return IndexResponse(
             indexed=result.get("indexed", 0),

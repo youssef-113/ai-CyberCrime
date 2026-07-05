@@ -8,6 +8,7 @@ import logging
 from typing import List, Dict, Any
 
 from .config import config
+from .retriever import _get_embedding_model
 
 logger = logging.getLogger("rag.ingestion")
 
@@ -15,20 +16,11 @@ _embedding_cache = {}
 
 _celery_app = None
 _chroma_client = None
-_embedding_model = None
 
 
 def _content_hash(model_id: str, text: str) -> str:
     content = f"{model_id}:{text}"
     return hashlib.sha256(content.encode()).hexdigest()
-
-
-def _get_embedding_model():
-    global _embedding_model
-    if _embedding_model is None:
-        from sentence_transformers import SentenceTransformer
-        _embedding_model = SentenceTransformer(config.embedding.model_name)
-    return _embedding_model
 
 
 def _get_chroma():

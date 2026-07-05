@@ -56,9 +56,8 @@ def _get_embedding_fn():
     global _embedding_fn
 
     if _embedding_fn is None:
-        from sentence_transformers import SentenceTransformer
-
-        _embedding_fn = SentenceTransformer(config.embedding.model_name)
+        from .retriever import _get_embedding_model
+        _embedding_fn = _get_embedding_model()
 
     return _embedding_fn
 

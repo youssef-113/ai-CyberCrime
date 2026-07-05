@@ -121,11 +121,10 @@ async def warmup_models():
     logger.info("Warming up embedding model...")
     try:
         import asyncio
-        from sentence_transformers import SentenceTransformer
-        model_name = os.getenv("EMBEDDING_MODEL_NAME", "intfloat/multilingual-e5-small")
+        from services.rag.retriever import _get_embedding_model
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, lambda: SentenceTransformer(model_name))
-        logger.info(f"Embedding model warmed up: {model_name}")
+        await loop.run_in_executor(None, _get_embedding_model)
+        logger.info("Embedding model warmed up (shared across RAG modules)")
     except Exception as e:
         logger.warning(f"Model warmup failed (will load on first request): {e}")
 
