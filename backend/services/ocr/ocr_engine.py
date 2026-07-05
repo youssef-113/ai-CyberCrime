@@ -470,14 +470,16 @@ class OCREngine:
             return self._empty_result(file_name, block_id, "paddleocr")
 
             try:
+                logger.info(">>> Before PaddleOCR call")
+
                 raw = self._paddle.ocr(img, cls=True)
 
-                logger.info("========== PADDLE RAW ==========")
+                logger.info(">>> After PaddleOCR call")
                 logger.info("Raw type: %s", type(raw))
                 logger.info("Raw value: %r", raw)
-                logger.info("================================")
+                logger.info("Raw length: %d", len(raw) if raw else 0)
 
-            except Exception as exc:
+            except Exception:
                 logger.exception("PaddleOCR failed")
                 return self._empty_result(file_name, block_id, "paddleocr")
         
