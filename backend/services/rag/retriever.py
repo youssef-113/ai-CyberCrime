@@ -100,7 +100,8 @@ def _vector_search(
     collection = _get_collection(collection_name)
     model = _get_embedding_model()
 
-    query_vec = model.encode([query], normalize_embeddings=True).astype(np.float32)[0].tolist()
+    prefixed_query = f"{config.embedding.query_prefix}{query}"
+    query_vec = model.encode([prefixed_query], normalize_embeddings=True).astype(np.float32)[0].tolist()
 
     query_kwargs = {
         "query_embeddings": [query_vec],

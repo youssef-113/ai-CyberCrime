@@ -115,6 +115,20 @@ async def cors_preflight_middleware(request: Request, call_next):
         return response
     return await call_next(request)
 
+# ── Startup Warmup ──────────────────────────────────────────────────────
+@app.on_event("startup")
+async def warmup_models():
+    logger.info("Warming up embedding model...")
+    try:
+        import asyncio
+        from sentence_transformers import SentenceTransformer
+        model_name = os.getenv("EMBEDDING_MODEL", "intfloat/multilingual-e5-small")
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: SentenceTransformer(model_name))
+        logger.info(f"Embedding model warmed up: {model_name}")
+    except Exception as e:
+        logger.warning(f"Model warmup failed (will load on first request): {e}")
+
 # ── Include All Routers ────────────────────────────────────────────────
 app.include_router(api_router)
 app.include_router(chat_router)

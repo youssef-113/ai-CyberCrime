@@ -144,7 +144,8 @@ def lookup_semantic(query: str, tenant_id: str = "default") -> Optional[CacheHit
 
     try:
         embed_fn = _get_embedding_fn()
-        query_vec = embed_fn.encode([query], normalize_embeddings=True).astype(np.float32)
+        prefixed = f"{config.embedding.query_prefix}{query}"
+        query_vec = embed_fn.encode([prefixed], normalize_embeddings=True).astype(np.float32)
 
         scores, indices = faiss_index.search(query_vec, 1)
         best_score = float(scores[0][0])
@@ -200,7 +201,8 @@ def store(query: str, response: Dict, tenant_id: str = "default"):
     if faiss_index is not None and config.cache.semantic_cache_enabled:
         try:
             embed_fn = _get_embedding_fn()
-            query_vec = embed_fn.encode([query], normalize_embeddings=True).astype(np.float32)
+            prefixed = f"{config.embedding.query_prefix}{query}"
+            query_vec = embed_fn.encode([prefixed], normalize_embeddings=True).astype(np.float32)
 
             idx = faiss_index.ntotal
             faiss_index.add(query_vec)
@@ -238,7 +240,7 @@ def _rebuild_faiss_index():
 
     if valid_entries:
         embed_fn = _get_embedding_fn()
-        queries = [entry["query"] for entry in valid_entries]
+        queries = [f"{config.embedding.query_prefix}{entry['query']}" for entry in valid_entries]
         vecs = embed_fn.encode(queries, normalize_embeddings=True).astype(np.float32)
 
         new_index.add(vecs)

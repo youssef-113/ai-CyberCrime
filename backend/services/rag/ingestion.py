@@ -72,6 +72,7 @@ def _get_redis():
 
 def get_or_compute_embedding(text: str, model_id: str = None) -> List[float]:
     model_id = model_id or config.embedding.model_name
+    text = f"{config.embedding.passage_prefix}{text}"
     cache_key = _content_hash(model_id, text)
 
     if cache_key in _embedding_cache:
@@ -108,6 +109,7 @@ def get_or_compute_embedding(text: str, model_id: str = None) -> List[float]:
 
 def batch_embed(texts: List[str], model_id: str = None) -> List[List[float]]:
     model_id = model_id or config.embedding.model_name
+    texts = [f"{config.embedding.passage_prefix}{t}" for t in texts]
     results = [None] * len(texts)
     uncached_indices = []
     uncached_texts = []
