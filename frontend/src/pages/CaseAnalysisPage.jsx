@@ -92,7 +92,6 @@ export default function CaseAnalysisPage() {
 
     setPipelineStep(0)
     setResult(null)
-    alerts.analysisStart()
 
     try {
       const data = await analyze(files, false)

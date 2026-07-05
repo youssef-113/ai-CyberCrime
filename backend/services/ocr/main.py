@@ -82,10 +82,11 @@ def _ensure_engine() -> OCREngine:
     global _ocr_engine
     if _ocr_engine is None:
         config = OCRConfig(
-            chandra_confidence_threshold=0.85,
+            groq_vision_confidence_threshold=0.90,
             paddle_confidence_threshold=0.80,
             use_preprocessing=True,
             target_width=800,
+            use_groq_vision=True,
             use_groq_layer=True,
         )
         _ocr_engine = get_ocr_engine(config)
@@ -316,16 +317,17 @@ async def engines_status() -> Dict[str, Any]:
     if _ocr_engine is None:
         return {
             "initialized": False,
-            "chandra_ocr2": {"available": False},
+            "groq_vision":  {"available": False},
             "paddleocr":    {"available": False},
             "groq":         {"available": False},
         }
     m = _ocr_engine.get_metrics()
     return {
         "initialized":  _ocr_engine._initialized,
-        "chandra_ocr2": {
-            "available": m["engines"]["chandra"],
-            "requests":  m["chandra_used"],
+        "groq_vision": {
+            "available": m["engines"]["groq_vision"],
+            "requests":  m["groq_vision_used"],
+            "model":     _ocr_engine.config.groq_vision_model,
         },
         "paddleocr": {
             "available": m["engines"]["paddle"],
@@ -336,10 +338,10 @@ async def engines_status() -> Dict[str, Any]:
             "requests":  m["groq_used"],
         },
         "config": {
-            "chandra_threshold": _ocr_engine.config.chandra_confidence_threshold,
-            "paddle_threshold":  _ocr_engine.config.paddle_confidence_threshold,
-            "preprocessing":     _ocr_engine.config.use_preprocessing,
-            "groq_layer":        _ocr_engine.config.use_groq_layer,
+            "groq_vision_threshold": _ocr_engine.config.groq_vision_confidence_threshold,
+            "paddle_threshold":      _ocr_engine.config.paddle_confidence_threshold,
+            "preprocessing":         _ocr_engine.config.use_preprocessing,
+            "groq_layer":            _ocr_engine.config.use_groq_layer,
         },
     }
 

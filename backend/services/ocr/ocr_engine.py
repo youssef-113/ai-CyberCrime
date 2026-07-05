@@ -1,22 +1,15 @@
 """
-OCR Engine — Chandra OCR 2 primary, PaddleOCR fallback, Groq AI understanding layer
+OCR Engine — Groq Vision API primary, PaddleOCR fallback, Groq understanding layer
 
 Architecture:
-  Primary   → Chandra OCR 2  (confidence threshold: 85 %)
-  Fallback  → PaddleOCR      (confidence threshold: 80 %)
-  Layer 3   → Groq AI        (understanding + entity extraction for low-confidence output)
-
-Key design points:
-- All readers initialised once at startup as a singleton
-- Weighted-average confidence scoring (longer words = higher weight)
-- Low-confidence words filtered before scoring
-- Groq is NEVER used as a primary OCR engine — only for understanding/validation
-- Full retry + timeout protection
-- Structured metrics emitted per request
+  Tier 1  → Groq Vision API   (confidence threshold: 90 %)
+  Tier 2  → PaddleOCR         (confidence threshold: 80 %)
+  Tier 3  → Groq AI           (understanding + entity extraction as last resort)
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import logging
@@ -32,13 +25,6 @@ logger = logging.getLogger("ocr.engine")
 # ── Optional engine imports ────────────────────────────────────────────────
 
 try:
-    from chandra_ocr import ChandraOCR  # type: ignore
-    CHANDRA_AVAILABLE = True
-except ImportError:
-    CHANDRA_AVAILABLE = False
-    logger.warning("Chandra OCR 2 not available — will fall back to PaddleOCR")
-
-try:
     from paddleocr import PaddleOCR  # type: ignore
     PADDLEOCR_AVAILABLE = True
 except ImportError:
@@ -52,6 +38,13 @@ except ImportError:
     HTTPX_AVAILABLE = False
     logger.warning("httpx not available — Groq layer disabled")
 
+try:
+    from groq import Groq
+    GROQ_SDK_AVAILABLE = True
+except ImportError:
+    GROQ_SDK_AVAILABLE = False
+    logger.warning("groq SDK not available — Groq Vision disabled")
+
 from .arabic_utils import detect_language, normalize_arabic_text
 from .models import ConfidenceScore, EvidenceBlock, OCRResult
 try:
@@ -60,17 +53,21 @@ except Exception as exc:  # pragma: no cover - dependency guard
     logger.warning("Preprocessing import failed: %s", exc)
     preprocess_image = None
 
+# ── Groq Vision API configuration ──────────────────────────────────────────
+GROQ_VISION_CONFIDENCE  = 0.90
+GROQ_API_URL            = os.getenv("GROQ_API_URL",     "https://api.groq.com/openai/v1/chat/completions")
+GROQ_API_KEY            = os.getenv("GROQ_API_KEY",     "")
+GROQ_VISION_MODEL       = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+GROQ_TIMEOUT            = float(os.getenv("GROQ_TIMEOUT", "30"))
+
 # ── Confidence thresholds ──────────────────────────────────────────────────
-CHANDRA_CONFIDENCE_THRESHOLD = 0.85   # below → try PaddleOCR
-PADDLE_CONFIDENCE_THRESHOLD  = 0.80   # below → send to Groq layer
-WORD_FILTER_THRESHOLD        = 0.30   # drop individual words below this
+PADDLE_CONFIDENCE_THRESHOLD  = 0.80
+WORD_FILTER_THRESHOLD        = 0.30
 CONFIDENCE_HIGH              = 0.75
 CONFIDENCE_MEDIUM            = 0.50
 TARGET_WIDTH                 = 800
 
-# ── Groq configuration ─────────────────────────────────────────────────────
-GROQ_API_URL   = os.getenv("GROQ_API_URL",   "https://api.groq.com/openai/v1/chat/completions")
-GROQ_API_KEY   = os.getenv("GROQ_API_KEY",   "")
+# ── Groq understanding layer config ────────────────────────────────────────
 GROQ_MODEL     = os.getenv("GROQ_MODEL",     "llama-3.3-70b-versatile")
 GROQ_TIMEOUT   = float(os.getenv("GROQ_TIMEOUT", "20"))
 
@@ -86,14 +83,16 @@ OCR_CACHE_TTL  = int(os.getenv("OCR_CACHE_TTL", "3600"))
 class OCRConfig:
     """Runtime-configurable OCR engine settings"""
     paddleocr_lang: str   = "ar"
-    chandra_langs: List[str]  = field(default_factory=lambda: ["ar", "en"])
     # Thresholds
-    chandra_confidence_threshold: float = CHANDRA_CONFIDENCE_THRESHOLD
-    paddle_confidence_threshold:  float = PADDLE_CONFIDENCE_THRESHOLD
-    word_filter_threshold:        float = WORD_FILTER_THRESHOLD
+    groq_vision_confidence_threshold: float = GROQ_VISION_CONFIDENCE
+    paddle_confidence_threshold:      float = PADDLE_CONFIDENCE_THRESHOLD
+    word_filter_threshold:            float = WORD_FILTER_THRESHOLD
     # Pre-processing
     use_preprocessing: bool = True
     target_width:      int  = TARGET_WIDTH
+    # Groq Vision (primary OCR)
+    use_groq_vision:          bool = True
+    groq_vision_model:        str  = GROQ_VISION_MODEL
     # Groq understanding layer
     use_groq_layer:    bool = True
 
@@ -150,7 +149,6 @@ class ConfidenceScorer:
 #  Groq Understanding Layer
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Prompt-injection guard — patterns that look like instruction overrides
 _INJECTION_PATTERNS = [
     "ignore previous", "disregard", "forget instructions",
     "system prompt", "you are now", "act as", "new instructions",
@@ -159,24 +157,15 @@ _INJECTION_PATTERNS = [
 
 
 def _sanitize_for_groq(text: str) -> str:
-    """Strip potential prompt-injection sequences before sending to Groq."""
     lower = text.lower()
     for pattern in _INJECTION_PATTERNS:
         if pattern in lower:
             text = text.replace(pattern, "[FILTERED]")
             logger.warning("Prompt-injection pattern filtered: %s", pattern)
-    return text[:4000]   # hard cap
+    return text[:4000]
 
 
 def groq_understand(raw_ocr_text: str) -> Dict[str, Any]:
-    """
-    Send low-confidence OCR output to Groq for structured understanding.
-
-    Groq is the UNDERSTANDING LAYER only — it never replaces the OCR reader.
-    Returns a dict with extracted entities and a confidence estimate.
-
-    Returns empty dict on any failure (caller decides whether to retry).
-    """
     if not HTTPX_AVAILABLE or not GROQ_API_KEY:
         logger.warning("Groq layer skipped — httpx or API key unavailable")
         return {}
@@ -218,7 +207,6 @@ def groq_understand(raw_ocr_text: str) -> Dict[str, Any]:
             resp.raise_for_status()
 
         raw_json = resp.json()["choices"][0]["message"]["content"].strip()
-        # Strip potential markdown fences
         if raw_json.startswith("```"):
             raw_json = raw_json.split("```")[1]
             if raw_json.startswith("json"):
@@ -248,23 +236,21 @@ class OCREngine:
     Three-tier OCR engine.
 
     Flow:
-      1. Preprocess image
-      2. Chandra OCR 2  → if confidence ≥ 85 %  →  done
-      3. PaddleOCR      → if confidence ≥ 80 %  →  done
-      4. Groq AI        → understanding + entity extraction
+      1. Groq Vision API  → if confidence ≥ 90 %  →  done
+      2. PaddleOCR        → if confidence ≥ 80 %  →  done
+      3. Groq understanding → entity extraction for any remaining low-confidence output
     """
 
     def __init__(self, config: Optional[OCRConfig] = None):
         self.config          = config or OCRConfig()
-        self._chandra        = None
+        self._groq_client    = None
         self._paddle         = None
         self._initialized    = False
         self._scorer         = ConfidenceScorer()
 
-        # Runtime metrics (in-memory; exported via /health or /metrics)
         self.metrics: Dict[str, Any] = {
             "total_requests":    0,
-            "chandra_used":      0,
+            "groq_vision_used":  0,
             "paddle_used":       0,
             "groq_used":         0,
             "errors":            0,
@@ -277,21 +263,19 @@ class OCREngine:
     # ── Initialisation ─────────────────────────────────────────────────────
 
     def initialize(self) -> None:
-        """Load all available OCR readers once at startup."""
         if self._initialized:
             return
 
-        # Chandra OCR 2 (primary)
-        if CHANDRA_AVAILABLE:
+        if GROQ_SDK_AVAILABLE and GROQ_API_KEY:
             try:
-                logger.info("Initialising Chandra OCR 2 …")
-                self._chandra = ChandraOCR(langs=self.config.chandra_langs)
-                logger.info("Chandra OCR 2 ready")
+                self._groq_client = Groq(api_key=GROQ_API_KEY)
+                logger.info("Groq Vision client ready (model=%s)", self.config.groq_vision_model)
             except Exception as exc:
-                logger.error("Chandra OCR 2 init failed: %s", exc)
-                self._chandra = None
+                logger.error("Groq Vision init failed: %s", exc)
+                self._groq_client = None
+        else:
+            logger.warning("Groq Vision unavailable — groq SDK or API key missing")
 
-        # PaddleOCR (fallback)
         if PADDLEOCR_AVAILABLE:
             try:
                 logger.info("Initialising PaddleOCR …")
@@ -315,11 +299,6 @@ class OCREngine:
         file_name: str,
         block_id: str = "E001",
     ) -> OCRResult:
-        """
-        Run the three-tier OCR pipeline on a single image.
-
-        Returns the best OCRResult, enriched with Groq data when triggered.
-        """
         if not self._initialized:
             self.initialize()
 
@@ -329,57 +308,48 @@ class OCREngine:
         try:
             img = self._prepare_image(image_bytes)
 
-            # ── Tier 1: Chandra OCR 2 ─────────────────────────────────────
-            result = self._run_chandra(img, file_name, block_id)
-
-            if result.confidence >= self.config.chandra_confidence_threshold:
-                logger.info(
-                    "Chandra OCR 2 accepted: conf=%.2f file=%s",
-                    result.confidence, file_name,
-                )
-                self.metrics["chandra_used"] += 1
-                return self._finalise(result, t_start)
-
-            logger.info(
-                "Chandra conf %.2f < %.2f — trying PaddleOCR",
-                result.confidence, self.config.chandra_confidence_threshold,
-            )
+            # ── Tier 1: Groq Vision API ────────────────────────────────────
+            groq_vision_result: Optional[OCRResult] = None
+            if self.config.use_groq_vision and self._groq_client is not None:
+                groq_vision_result = self._run_groq_vision(image_bytes, file_name, block_id)
+                if groq_vision_result.confidence >= self.config.groq_vision_confidence_threshold:
+                    logger.info("Groq Vision accepted: conf=%.2f file=%s", groq_vision_result.confidence, file_name)
+                    self.metrics["groq_vision_used"] += 1
+                    return self._finalise(groq_vision_result, t_start)
+                logger.info("Groq Vision conf %.2f < %.2f — trying PaddleOCR",
+                            groq_vision_result.confidence, self.config.groq_vision_confidence_threshold)
 
             # ── Tier 2: PaddleOCR ─────────────────────────────────────────
-            paddle_result = self._run_paddle(img, file_name, block_id)
+            result = self._run_paddle(img, file_name, block_id)
 
-            if paddle_result.confidence >= self.config.paddle_confidence_threshold:
-                logger.info(
-                    "PaddleOCR accepted: conf=%.2f file=%s",
-                    paddle_result.confidence, file_name,
-                )
+            if result.confidence >= self.config.paddle_confidence_threshold:
+                logger.info("PaddleOCR accepted: conf=%.2f file=%s", result.confidence, file_name)
                 self.metrics["paddle_used"] += 1
-                return self._finalise(paddle_result, t_start)
+                return self._finalise(result, t_start)
 
-            logger.info(
-                "PaddleOCR conf %.2f < %.2f — sending to Groq layer",
-                paddle_result.confidence, self.config.paddle_confidence_threshold,
-            )
+            logger.info("PaddleOCR conf %.2f < %.2f — sending to Groq understanding layer",
+                        result.confidence, self.config.paddle_confidence_threshold)
 
             # ── Tier 3: Groq understanding layer ──────────────────────────
-            best_text = (
-                paddle_result.text if paddle_result.confidence > result.confidence
-                else result.text
-            )
-            best_result = (
-                paddle_result if paddle_result.confidence > result.confidence
-                else result
-            )
+            # If Groq Vision returned partial text, use it as input instead of empty Paddle result
+            best_text = result.text
+            if groq_vision_result is not None and len(groq_vision_result.text) > len(result.text):
+                best_text = groq_vision_result.text
 
             if self.config.use_groq_layer:
                 groq_data = groq_understand(best_text)
                 if groq_data:
                     self.metrics["groq_used"] += 1
-                    best_result = self._merge_groq(best_result, groq_data, file_name, block_id)
+                    result = self._merge_groq(result, groq_data, file_name, block_id)
+                    # If Groq returned empty text (no OCR content), inject its entities on an empty block
+                    if not result.text:
+                        result.text = best_text
+                        result.blocks = []
+                        result.confidence = 0.3
 
-            best_result.fallback_triggered = True
+            result.fallback_triggered = True
             self.metrics["paddle_used"] += 1
-            return self._finalise(best_result, t_start)
+            return self._finalise(result, t_start)
 
         except Exception as exc:
             self.metrics["errors"] += 1
@@ -391,7 +361,6 @@ class OCREngine:
         images: List[Tuple[bytes, str]],
         base_block_id: str = "E",
     ) -> List[OCRResult]:
-        """Process multiple images, reusing the same reader instances."""
         results = []
         for idx, (image_bytes, file_name) in enumerate(images):
             block_id = f"{base_block_id}{idx + 1:03d}"
@@ -403,26 +372,24 @@ class OCREngine:
         return results
 
     def get_metrics(self) -> Dict[str, Any]:
-        """Return a snapshot of runtime metrics."""
         return {
             "total_requests":  self.metrics["total_requests"],
-            "chandra_used":    self.metrics["chandra_used"],
+            "groq_vision_used": self.metrics["groq_vision_used"],
             "paddle_used":     self.metrics["paddle_used"],
             "groq_used":       self.metrics["groq_used"],
             "errors":          self.metrics["errors"],
             "avg_confidence":  round(self.metrics["avg_confidence"], 4),
             "avg_latency_ms":  round(self.metrics["avg_latency_ms"], 2),
             "engines": {
-                "chandra":  self._chandra is not None,
-                "paddle":   self._paddle  is not None,
-                "groq":     bool(GROQ_API_KEY),
+                "groq_vision": self._groq_client is not None,
+                "paddle":      self._paddle  is not None,
+                "groq":        bool(GROQ_API_KEY),
             },
         }
 
     # ── Private helpers ────────────────────────────────────────────────────
 
     def _finalise(self, result: OCRResult, t_start: float) -> OCRResult:
-        """Update running metrics and return result."""
         latency_ms = (time.perf_counter() - t_start) * 1000
         n = self.metrics["total_requests"]
         self.metrics["_conf_sum"]    += result.confidence
@@ -449,20 +416,74 @@ class OCREngine:
 
         raise ValueError("Cannot decode image bytes — corrupt or unsupported format")
 
-    # ── Chandra OCR 2 ─────────────────────────────────────────────────────
+    # ── Groq Vision API ────────────────────────────────────────────────────
 
-    def _run_chandra(self, img: np.ndarray, file_name: str, block_id: str) -> OCRResult:
-        if self._chandra is None:
-            logger.debug("Chandra not available — returning empty result")
-            return self._empty_result(file_name, block_id, "chandra_ocr2")
+    def _run_groq_vision(self, image_bytes: bytes, file_name: str, block_id: str) -> OCRResult:
+        if self._groq_client is None:
+            return self._empty_result(file_name, block_id, "groq_vision")
 
         try:
-            raw = self._chandra.read(img)   # returns list of (bbox, text, conf)
-        except Exception as exc:
-            logger.error("Chandra OCR 2 read failed: %s", exc)
-            return self._empty_result(file_name, block_id, "chandra_ocr2")
+            b64_image = base64.b64encode(image_bytes).decode("utf-8")
+            mime_type = _infer_mime(file_name) or "image/jpeg"
 
-        return self._parse_results(raw, file_name, block_id, "chandra_ocr2", "C")
+            response = self._groq_client.chat.completions.create(
+                model=self.config.groq_vision_model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": (
+                                    "You are an OCR engine. Extract ALL visible text from this image exactly as written. "
+                                    "Return ONLY the extracted text — no commentary, no formatting, no markdown. "
+                                    "Preserve the original language (Arabic, English, or both). "
+                                    "If the image contains no readable text, return an empty string."
+                                ),
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{mime_type};base64,{b64_image}",
+                                },
+                            },
+                        ],
+                    },
+                ],
+                temperature=0.0,
+                max_tokens=4096,
+            )
+
+            raw_text = response.choices[0].message.content or ""
+            raw_text = raw_text.strip().strip('"\'`')
+
+            if not raw_text:
+                return self._empty_result(file_name, block_id, "groq_vision")
+
+            norm = normalize_arabic_text(raw_text)
+            block = EvidenceBlock(
+                block_id=block_id,
+                file_name=file_name,
+                raw_text=raw_text,
+                normalized_text=norm,
+                confidence=0.95,
+                quality_flag="OK",
+                ocr_source="groq_vision",
+                bbox=None,
+            )
+
+            return OCRResult(
+                text=norm,
+                confidence=0.90,
+                blocks=[block],
+                engine="groq_vision",
+                confidence_score=self._scorer.compute([(raw_text, 0.95)], self.config.word_filter_threshold),
+                fallback_triggered=False,
+            )
+
+        except Exception as exc:
+            logger.error("Groq Vision failed for %s: %s", file_name, exc)
+            return self._empty_result(file_name, block_id, "groq_vision")
 
     # ── PaddleOCR ─────────────────────────────────────────────────────────
 
@@ -479,15 +500,12 @@ class OCREngine:
         if not raw or not raw[0]:
             return self._empty_result(file_name, block_id, "paddleocr")
 
-        # Normalise PaddleOCR format → common (bbox, text, conf)
         normalised = []
         for line in raw[0]:
             bbox, (text, conf) = line
             normalised.append((bbox, text, conf))
 
-        result = self._parse_results(normalised, file_name, block_id, "paddleocr", "P")
-        result.fallback_triggered = True
-        return result
+        return self._parse_results(normalised, file_name, block_id, "paddleocr", "P")
 
     # ── Shared result parser ───────────────────────────────────────────────
 
@@ -546,12 +564,6 @@ class OCREngine:
         file_name: str,
         block_id: str,
     ) -> OCRResult:
-        """
-        Enrich the OCR result with Groq's structured understanding.
-
-        Groq may return a better full_text and a confidence estimate.
-        We only *override* the text if Groq returns a higher confidence.
-        """
         groq_conf = groq_data.get("confidence", 0) / 100.0
 
         if groq_data.get("full_text") and groq_conf > result.confidence:
@@ -570,7 +582,6 @@ class OCREngine:
             result.text       = better_text
             result.confidence = round(groq_conf, 4)
 
-        # Always attach Groq's structured entities in processing metadata
         result.groq_entities = {
             "crime_type":      groq_data.get("crime_type"),
             "threat_detected": groq_data.get("threat_detected", False),
@@ -619,18 +630,25 @@ class OCREngine:
         )
 
 
+def _infer_mime(file_name: str) -> Optional[str]:
+    ext = (file_name or "").rsplit(".", 1)[-1].lower()
+    return {
+        "jpg": "image/jpeg", "jpeg": "image/jpeg",
+        "png": "image/png",
+        "webp": "image/webp",
+    }.get(ext)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  Cache helpers
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _ocr_cache_key(image_bytes: bytes) -> str:
-    """Deterministic cache key based on image content hash."""
     digest = hashlib.sha256(image_bytes).hexdigest()
     return f"ocr:result:{digest}"
 
 
 def get_cached_result(image_bytes: bytes) -> Optional[Dict]:
-    """Return cached OCR result dict, or None on miss."""
     try:
         from services.common.cache import cache, CACHE_PREFIX_OCR
         key = _ocr_cache_key(image_bytes)
@@ -640,7 +658,6 @@ def get_cached_result(image_bytes: bytes) -> Optional[Dict]:
 
 
 def cache_result(image_bytes: bytes, result_dict: Dict, ttl: int = OCR_CACHE_TTL) -> None:
-    """Store OCR result in Redis cache."""
     try:
         from services.common.cache import cache, CACHE_PREFIX_OCR
         key = _ocr_cache_key(image_bytes)
@@ -657,7 +674,6 @@ _ocr_engine: Optional[OCREngine] = None
 
 
 def get_ocr_engine(config: Optional[OCRConfig] = None) -> OCREngine:
-    """Return the global OCR engine singleton, initialising on first call."""
     global _ocr_engine
     if _ocr_engine is None:
         _ocr_engine = OCREngine(config)
@@ -666,6 +682,5 @@ def get_ocr_engine(config: Optional[OCRConfig] = None) -> OCREngine:
 
 
 def reset_ocr_engine() -> None:
-    """Reset singleton (test/reload use only)."""
     global _ocr_engine
     _ocr_engine = None

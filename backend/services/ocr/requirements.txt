@@ -4,12 +4,10 @@ uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 pydantic==2.5.0
 httpx==0.25.0
+groq==0.12.0
 
 # ── OCR engines ─────────────────────────────────────────────────────────────
-# Primary: Chandra OCR 2 (Arabic-first transformer OCR)
-chandra-ocr==2.0.0
-
-# Fallback: PaddleOCR
+# PaddleOCR (primary + Groq AI understanding layer for low-confidence results)
 paddleocr==2.7.0
 paddlepaddle==2.6.0
 

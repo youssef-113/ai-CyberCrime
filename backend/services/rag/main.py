@@ -30,7 +30,7 @@ class RetrieveRequest(BaseModel):
     crime_type: str = ""
     top_k: int = 5
     tenant_id: str = "default"
-    transform_strategy: str = "none"
+    transform_strategy: str = "auto"
     user_id: Optional[str] = None  # For retrieval_logs tracking
     session_id: Optional[str] = None  # For retrieval_logs tracking
 
