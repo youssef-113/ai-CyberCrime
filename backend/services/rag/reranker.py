@@ -4,6 +4,7 @@ Reranks retrieved results using a cross-encoder model.
 Cross-encoder reranking alone solves nearly 80% of lookup-style queries.
 """
 import logging
+from math import exp
 from typing import List, Optional
 
 from .config import config
@@ -12,6 +13,13 @@ from .retriever import RetrievalResult
 logger = logging.getLogger("rag.reranker")
 
 _reranker_model = None
+
+
+def _sigmoid(x: float) -> float:
+    try:
+        return 1.0 / (1.0 + exp(-x))
+    except OverflowError:
+        return 0.0 if x < 0 else 1.0
 
 
 def _get_reranker():
@@ -59,9 +67,9 @@ def rerank(
         # Cross-encoder scoring
         scores = model.predict(pairs, show_progress_bar=False)
 
-        # Assign reranker scores and re-sort
+        # Assign reranker scores (normalized to [0,1] via sigmoid) and re-sort
         for i, result in enumerate(results):
-            result.combined_score = float(scores[i])
+            result.combined_score = _sigmoid(float(scores[i]))
 
         results.sort(key=lambda r: r.combined_score, reverse=True)
 

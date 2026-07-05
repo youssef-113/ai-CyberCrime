@@ -19,11 +19,21 @@ def _get_chroma():
 
     if _chroma_client is None:
         import chromadb
-        _chroma_client = chromadb.CloudClient(
-            api_key=config.chroma.api_key,
-            tenant=config.chroma.cloud_tenant,
-            database=config.chroma.cloud_database,
-        )
+        import os
+
+        if config.chroma.client_type == "cloud":
+            _chroma_client = chromadb.CloudClient(
+                api_key=config.chroma.api_key,
+                tenant=config.chroma.cloud_tenant,
+                database=config.chroma.cloud_database,
+            )
+        else:
+            persist_dir = config.chroma.persist_directory
+            if not os.path.isabs(persist_dir):
+                base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                persist_dir = os.path.join(base, persist_dir)
+            os.makedirs(persist_dir, exist_ok=True)
+            _chroma_client = chromadb.PersistentClient(path=persist_dir)
 
     return _chroma_client
 
@@ -152,25 +162,24 @@ def _keywords_to_set(keywords: Any) -> set:
         return {str(k).lower().strip() for k in keywords if str(k).strip()}
 
     if isinstance(keywords, str):
-        return {k.lower().strip() for k in keywords.replace(",", " ").split() if k.strip()}
+        # Handle stringified list like "['تشهير', 'بيانات']"
+        cleaned = keywords.replace("[", "").replace("]", "").replace("'", "").replace('"', "")
+        return {k.lower().strip() for k in cleaned.replace(",", " ").split() if k.strip()}
 
     return set()
 
 
 def _bm25_like_scores(query: str, results: List[RetrievalResult]) -> Dict[str, float]:
-    query_terms = {term.lower().strip() for term in query.split() if term.strip()}
+    query_terms = _tokenize(query)
     scores = {}
 
     if not query_terms:
         return scores
 
     for result in results:
-        text = (result.text or "").lower()
-        parent_text = (result.parent_text or "").lower()
-        full_text = text + " " + parent_text
-
-        text_terms = set(full_text.split())
-        keyword_terms = _keywords_to_set(result.metadata.get("keywords", ""))
+        full_text = ((result.text or "") + " " + (result.parent_text or ""))
+        text_terms = _tokenize(full_text)
+        keyword_terms = _tokenize(' '.join(_keywords_to_set(result.metadata.get("keywords", ""))))
 
         overlap = len(query_terms & text_terms)
         overlap += len(query_terms & keyword_terms) * 2
@@ -179,6 +188,108 @@ def _bm25_like_scores(query: str, results: List[RetrievalResult]) -> Dict[str, f
             scores[result.id] = overlap / max(len(query_terms), 1)
 
     return scores
+
+
+_ARABIC_NORMALIZE_MAP = {
+    '\u0622': '\u0627',  # آ → ا
+    '\u0623': '\u0627',  # أ → ا
+    '\u0625': '\u0627',  # إ → ا
+    '\u0649': '\u064A',  # ى → ي
+    '\u0629': '\u0647',  # ة → ه
+    '\u064B': '', '\u064C': '', '\u064D': '', '\u064E': '',
+    '\u064F': '', '\u0650': '', '\u0651': '', '\u0652': '',  # Remove diacritics
+}
+
+_ARABIC_PREFIXES = ['\u0627\u0644', '\u0648', '\u0641', '\u0628', '\u0643', '\u0644']  # ال, و, ف, ب, ك, ل
+
+
+def _normalize_arabic(text: str) -> str:
+    res = []
+    for c in text:
+        if c in _ARABIC_NORMALIZE_MAP:
+            c = _ARABIC_NORMALIZE_MAP[c]
+        if c:
+            res.append(c)
+    return ''.join(res)
+
+
+def _strip_arabic_prefix(word: str) -> str:
+    """Strip common Arabic prefixes like ال, و, ف, ب."""
+    for prefix in _ARABIC_PREFIXES:
+        if word.startswith(prefix) and len(word) > len(prefix):
+            return word[len(prefix):]
+    return word
+
+
+def _tokenize(text: str) -> set:
+    norm = _normalize_arabic(text.lower().strip())
+    tokens = set()
+    for t in norm.split():
+        t = t.strip()
+        if not t:
+            continue
+        tokens.add(t)
+        stripped = _strip_arabic_prefix(t)
+        if stripped != t:
+            tokens.add(stripped)
+    return tokens
+
+
+def _count_arabic_chars(text: str) -> int:
+    return sum(1 for c in text if '\u0600' <= c <= '\u06FF' or '\u0750' <= c <= '\u077F' or '\u08A0' <= c <= '\u08FF' or '\uFB50' <= c <= '\uFDFF' or '\uFE70' <= c <= '\uFEFF')
+
+
+def _keyword_search_all(query: str, collection_name: str, top_k: int, tenant_id: str) -> List[RetrievalResult]:
+    """Full keyword search across ALL articles in ChromaDB.
+    
+    Bypasses vector search entirely — fetches every chunk and scores by
+    keyword/term overlap.  Needed for Arabic queries where the English-only
+    embedding model produces random similarity scores.
+    """
+    collection = _get_collection(collection_name)
+    total = collection.count()
+    if total == 0:
+        return []
+
+    all_data = collection.get(
+        include=["documents", "metadatas"],
+        limit=total,
+    )
+    ids = all_data.get("ids", [])
+    documents = all_data.get("documents", []) or []
+    metadatas = all_data.get("metadatas", []) or []
+
+    query_terms = _tokenize(query)
+    if not query_terms:
+        return []
+
+    scored = []
+    for idx, chunk_id in enumerate(ids):
+        text = documents[idx] if idx < len(documents) else ""
+        meta = metadatas[idx] if idx < len(metadatas) and metadatas[idx] else {}
+
+        # Score by term overlap in text + keywords (keywords weighted 3x)
+        text_terms = _tokenize(text) if text else set()
+        kw_terms = _tokenize(' '.join(_keywords_to_set(meta.get("keywords", ""))))
+        score = len(query_terms & text_terms)
+        score += len(query_terms & kw_terms) * 3
+
+        if score > 0:
+            parent_text = None
+            if meta.get("chunk_type") == "child" and meta.get("parent_id"):
+                parent_text = _fetch_parent_text(collection, meta.get("parent_id"))
+
+            scored.append(RetrievalResult(
+                id=str(chunk_id),
+                text=text,
+                metadata=meta,
+                combined_score=float(score) / float(len(query_terms)),
+                parent_text=parent_text,
+            ))
+
+    scored.sort(key=lambda r: r.combined_score, reverse=True)
+    logger.info(f"Keyword search: {len(scored)} of {total} chunks matched (arabic query)")
+    return scored[:top_k]
 
 
 def hybrid_retrieve(
@@ -193,6 +304,13 @@ def hybrid_retrieve(
 
     if config.multi_tenant.enabled and tenant_id != "default":
         collection_name = f"{config.multi_tenant.namespace_prefix}{tenant_id}"
+
+    # Detect Arabic-heavy queries → use keyword-only search
+    arabic_ratio = _count_arabic_chars(query) / max(len(query), 1)
+    is_arabic_query = arabic_ratio > 0.3
+
+    if is_arabic_query:
+        return _keyword_search_all(query, collection_name, top_k, tenant_id)
 
     vector_results = _vector_search(
         query=query,
@@ -254,9 +372,9 @@ def retrieve_and_validate(
 
 def get_retriever_stats() -> Dict[str, Any]:
     stats = {
-        "vector_db": "chromadb_cloud",
-        "cloud_tenant": config.chroma.cloud_tenant,
-        "cloud_database": config.chroma.cloud_database,
+        "vector_db": f"chromadb_{config.chroma.client_type}",
+        "client_type": config.chroma.client_type,
+        "persist_directory": config.chroma.persist_directory if config.chroma.client_type == "persistent" else "",
         "collection": config.chroma.collection_name,
     }
 

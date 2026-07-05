@@ -2,19 +2,15 @@
 import logging
 from typing import List, Dict, Any
 
-import chromadb
 from .config import config
 
 logger = logging.getLogger("rag.citations")
 
 
+# Reuse the cached client from retriever to avoid new connections per validation
 def _get_chroma_client():
-    """Get ChromaDB cloud client instance."""
-    return chromadb.CloudClient(
-        api_key=config.chroma.api_key,
-        tenant=config.chroma.cloud_tenant,
-        database=config.chroma.cloud_database,
-    )
+    from .retriever import _get_chroma
+    return _get_chroma()
 
 
 def validate_citations(

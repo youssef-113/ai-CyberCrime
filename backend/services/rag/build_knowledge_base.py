@@ -24,7 +24,7 @@ def build_knowledge_base(
 
     articles_path = articles_path or os.getenv(
         "ARTICLES_PATH",
-        "/data/law/articles.json"
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "data", "law", "articles.json")
     )
 
     try:

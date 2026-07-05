@@ -5,10 +5,12 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ChromaConfig:
+    client_type: str = os.getenv("CHROMA_CLIENT_TYPE", "persistent")  # "persistent" | "cloud"
     api_key: str = os.getenv("CHROMA_API_KEY", "")
     cloud_tenant: str = os.getenv("CHROMA_CLOUD_TENANT", "")
     cloud_database: str = os.getenv("CHROMA_CLOUD_DATABASE", "egyptian_law")
     collection_name: str = os.getenv("CHROMA_COLLECTION", "egyptian_law")
+    persist_directory: str = os.getenv("CHROMA_PERSIST_DIR", "data/law_db")
 
 
 @dataclass
@@ -53,7 +55,7 @@ class RerankerConfig:
 class OllamaConfig:
     base_url: str = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
     model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
-    timeout: int = int(os.getenv("OLLAMA_TIMEOUT", "60"))
+    timeout: int = int(os.getenv("OLLAMA_TIMEOUT", "5"))
     temperature: float = float(os.getenv("OLLAMA_TEMPERATURE", "0.3"))
     max_tokens: int = int(os.getenv("OLLAMA_MAX_TOKENS", "300"))
 

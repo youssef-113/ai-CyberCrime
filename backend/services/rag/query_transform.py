@@ -169,19 +169,23 @@ async def transform_query(query: str, strategy: str = "auto") -> Dict:
         Dict with transformed queries and metadata
     """
     if strategy == "auto":
-        # Auto-select based on query characteristics
         word_count = len(query.split())
-        if word_count <= 5:
-            strategy = "hyde"  # Short queries benefit from HyDE
-        elif "?" in query and word_count > 15:
-            strategy = "step_back"  # Complex questions benefit from step-back
+        if word_count <= 5 and config.query_transform.hyde_enabled:
+            strategy = "hyde"
+        elif "?" in query and word_count > 15 and config.query_transform.step_back_enabled:
+            strategy = "step_back"
+        elif config.query_transform.rag_fusion_enabled:
+            strategy = "fusion"
         else:
-            strategy = "fusion"  # Default to RAG-Fusion
+            strategy = "none"
 
     result = {"original_query": query, "strategy": strategy, "queries": [query]}
 
     try:
-        if strategy == "hyde":
+        if strategy == "none":
+            result["queries"] = [query]
+
+        elif strategy == "hyde":
             transformed = await hyde_transform(query)
             result["queries"] = [transformed]
             result["hyde_document"] = transformed

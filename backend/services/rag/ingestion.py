@@ -32,16 +32,25 @@ def _get_embedding_model():
 
 
 def _get_chroma():
-    """Lazy ChromaDB cloud client."""
+    """Lazy ChromaDB client (persistent by default, cloud if configured)."""
     global _chroma_client
     if _chroma_client is None:
         import chromadb
+        import os
 
-        _chroma_client = chromadb.CloudClient(
-            api_key=config.chroma.api_key,
-            tenant=config.chroma.cloud_tenant,
-            database=config.chroma.cloud_database,
-        )
+        if config.chroma.client_type == "cloud":
+            _chroma_client = chromadb.CloudClient(
+                api_key=config.chroma.api_key,
+                tenant=config.chroma.cloud_tenant,
+                database=config.chroma.cloud_database,
+            )
+        else:
+            persist_dir = config.chroma.persist_directory
+            if not os.path.isabs(persist_dir):
+                base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                persist_dir = os.path.join(base, persist_dir)
+            os.makedirs(persist_dir, exist_ok=True)
+            _chroma_client = chromadb.PersistentClient(path=persist_dir)
 
     return _chroma_client
 

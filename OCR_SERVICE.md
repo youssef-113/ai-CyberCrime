@@ -69,9 +69,9 @@ The OCR Service extracts text and structured entities from uploaded evidence fil
                 └──────┬──────────────┘
                        │
                 ┌──────▼──────────────┐
-                │  Threat Analysis     │
-                │ keyword matching     │
-                │ threat score (0–1)   │
+                │  Threat Analysis    │
+                │ keyword matching    │
+                │ threat score (0–1)  │
                 └──────┬──────────────┘
                        │
                 ┌──────▼──────────────┐

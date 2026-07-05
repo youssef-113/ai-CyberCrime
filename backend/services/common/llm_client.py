@@ -8,7 +8,7 @@ from pydantic import BaseModel, ValidationError
 
 # Configuration from env
 GROQ_URL = os.getenv("GROQ_API_URL", os.getenv("LLM_BASE_URL", ""))
-GROQ_KEY = os.getenv("GROQ_API_KEY", os.getenv("GROQ_API_KEY", ""))
+GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 FALLBACK_URL = os.getenv("FALLBACK_API_URL", "")
 FALLBACK_KEY = os.getenv("FALLBACK_API_KEY", "")
 TIMEOUT = int(os.getenv("LLM_TIMEOUT", "30"))

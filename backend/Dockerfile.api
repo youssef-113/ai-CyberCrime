@@ -33,6 +33,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements-api.txt
 
+# ── Pre-download embedding model (avoids 90 MB download on first request) ──
+# Falls back gracefully if network is unavailable during build.
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" 2>&1 || echo "Model pre-download skipped (will download at runtime)"
+
 # ── Application Code ──
 COPY . .
 

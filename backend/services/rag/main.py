@@ -9,6 +9,7 @@ Ingestion path:
 Document Upload -> Parse -> Chunk -> Embed -> Index -> ChromaDB
 """
 
+import asyncio
 import time
 import logging
 from typing import List, Optional, Dict, Any
@@ -29,7 +30,7 @@ class RetrieveRequest(BaseModel):
     crime_type: str = ""
     top_k: int = 5
     tenant_id: str = "default"
-    transform_strategy: str = "auto"
+    transform_strategy: str = "none"
     user_id: Optional[str] = None  # For retrieval_logs tracking
     session_id: Optional[str] = None  # For retrieval_logs tracking
 
@@ -150,9 +151,11 @@ def get_stats():
 
     return {
         "config": {
-            "vector_db": "chromadb_cloud",
-            "chroma_cloud_tenant": config.chroma.cloud_tenant,
-            "chroma_cloud_database": config.chroma.cloud_database,
+            "vector_db": f"chromadb_{config.chroma.client_type}",
+            "chroma_client_type": config.chroma.client_type,
+            "chroma_persist_directory": config.chroma.persist_directory if config.chroma.client_type == "persistent" else "",
+            "chroma_cloud_tenant": config.chroma.cloud_tenant if config.chroma.client_type == "cloud" else "",
+            "chroma_cloud_database": config.chroma.cloud_database if config.chroma.client_type == "cloud" else "",
             "chroma_collection": config.chroma.collection_name,
             "embedding_model": config.embedding.model_name,
             "chunk_size": config.chunking.chunk_size,
@@ -221,16 +224,15 @@ async def retrieve(request: RetrieveRequest):
     try:
         from .retriever import retrieve_and_validate
 
+        loop = asyncio.get_event_loop()
+        retrieval_tasks = []
         for q in queries:
-            rv = retrieve_and_validate(
-                q,
-                top_k=request.top_k * 2,
-                tenant_id=request.tenant_id,
-                crime_type=request.crime_type,
+            retrieval_tasks.append(
+                loop.run_in_executor(None, retrieve_and_validate, q, request.top_k * 2, request.tenant_id, None, request.crime_type)
             )
-            # rv contains 'results' (list) and 'validation' dict
+
+        for rv in await asyncio.gather(*retrieval_tasks):
             all_results.extend(rv.get("results", []))
-            # propagate validation for caching/metrics later if needed
             validation = rv.get("validation")
 
     except Exception as e:
@@ -250,7 +252,8 @@ async def retrieve(request: RetrieveRequest):
 
     try:
        from .reranker import rerank
-       unique_results = rerank(request.query, unique_results, top_n=request.top_k)
+       loop = asyncio.get_event_loop()
+       unique_results = await loop.run_in_executor(None, rerank, request.query, unique_results, request.top_k)
     except Exception as e:
        logger.warning(f"Reranking failed: {e}")
        unique_results = unique_results[:request.top_k]
@@ -279,21 +282,20 @@ async def retrieve(request: RetrieveRequest):
     try:
         from .observability import record_retrieval, RetrievalMetric
 
-        record_retrieval(
-            RetrievalMetric(
-                timestamp=time.time(),
-                query=request.query,
-                tenant_id=request.tenant_id,
-                strategy=strategy_used,
-                num_results=len(articles),
-                top_score=articles[0].relevance_score if articles else 0.0,
-                avg_score=sum(a.relevance_score for a in articles) / len(articles) if articles else 0.0,
-                cache_hit=False,
-                latency_ms=latency,
-                reranker_applied=config.reranker.enabled,
-                query_transformed=strategy_used != "none",
-            )
-        )
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, record_retrieval, RetrievalMetric(
+            timestamp=time.time(),
+            query=request.query,
+            tenant_id=request.tenant_id,
+            strategy=strategy_used,
+            num_results=len(articles),
+            top_score=articles[0].relevance_score if articles else 0.0,
+            avg_score=sum(a.relevance_score for a in articles) / len(articles) if articles else 0.0,
+            cache_hit=False,
+            latency_ms=latency,
+            reranker_applied=config.reranker.enabled,
+            query_transformed=strategy_used != "none",
+        ))
 
     except Exception as e:
         logger.warning(f"Metrics recording failed: {e}")
@@ -302,11 +304,13 @@ async def retrieve(request: RetrieveRequest):
         "articles": [a.dict() for a in articles],
     }
 
-    try:
-        from .cache import store
-        store(enhanced_query, response_dict, request.tenant_id)
-    except Exception as e:
-        logger.warning(f"Cache store failed: {e}")
+    if articles:
+        try:
+            from .cache import store
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, store, enhanced_query, response_dict, request.tenant_id)
+        except Exception as e:
+            logger.warning(f"Cache store failed: {e}")
 
     # Validate citations before returning
     articles_dicts = [a.dict() for a in articles]
