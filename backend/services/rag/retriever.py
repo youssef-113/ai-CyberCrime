@@ -306,13 +306,7 @@ def hybrid_retrieve(
     if config.multi_tenant.enabled and tenant_id != "default":
         collection_name = f"{config.multi_tenant.namespace_prefix}{tenant_id}"
 
-    # Detect Arabic-heavy queries → use keyword-only search
-    arabic_ratio = _count_arabic_chars(query) / max(len(query), 1)
-    is_arabic_query = arabic_ratio > 0.3
-
-    if is_arabic_query:
-        return _keyword_search_all(query, collection_name, top_k, tenant_id)
-
+    # multilingual-e5-small handles Arabic natively, so use vector search for all queries
     vector_results = _vector_search(
         query=query,
         collection_name=collection_name,

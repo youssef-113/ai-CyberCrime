@@ -250,17 +250,13 @@ async def retrieve(request: RetrieveRequest):
             seen_articles.add(article_num)
             unique_results.append(r)
 
-    arabic_ratio = sum(1 for c in request.query if '\u0600' <= c <= '\u06ff' or '\u0750' <= c <= '\u077f' or '\ufe70' <= c <= '\ufeff') / max(len(request.query), 1)
-    if arabic_ratio > 0.3:
-        logger.debug("Arabic query, skipping cross-encoder reranker")
-    else:
-        try:
-           from .reranker import rerank
-           loop = asyncio.get_event_loop()
-           unique_results = await loop.run_in_executor(None, rerank, request.query, unique_results, request.top_k)
-        except Exception as e:
-           logger.warning(f"Reranking failed: {e}")
-           unique_results = unique_results[:request.top_k]
+    try:
+       from .reranker import rerank
+       loop = asyncio.get_event_loop()
+       unique_results = await loop.run_in_executor(None, rerank, request.query, unique_results, request.top_k)
+    except Exception as e:
+       logger.warning(f"Reranking failed: {e}")
+       unique_results = unique_results[:request.top_k]
 
     articles = []
 
