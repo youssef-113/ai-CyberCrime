@@ -469,12 +469,19 @@ class OCREngine:
         if self._paddle is None:
             return self._empty_result(file_name, block_id, "paddleocr")
 
-        try:
-            raw = self._paddle.ocr(img, cls=True)
-        except Exception as exc:
-            logger.error("PaddleOCR failed: %s", exc)
-            return self._empty_result(file_name, block_id, "paddleocr")
+            try:
+                raw = self._paddle.ocr(img, cls=True)
 
+                logger.info("========== PADDLE RAW ==========")
+                logger.info("Raw type: %s", type(raw))
+                logger.info("Raw value: %r", raw)
+                logger.info("================================")
+
+            except Exception as exc:
+                logger.exception("PaddleOCR failed")
+                return self._empty_result(file_name, block_id, "paddleocr")
+        
+        logger.info("Raw length: %d", len(raw) if raw else 0)        
         if not raw or not raw[0]:
             return self._empty_result(file_name, block_id, "paddleocr")
 
