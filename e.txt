@@ -15,8 +15,9 @@ LLM_PROVIDER=ollama
 
 
 GROQ_API_URL=https://api.groq.com/openai/v1/chat/completions
-GROQ_API_KEY= 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
+GROQ_API_KEY=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
 GROQ_MODEL=llama-3.1-8b-instant
+GROQ_VISION_MODEL=llama-3.2-11b-vision-preview
 GROQ_TIMEOUT=20
 
 # Fallback: Second Groq API key (for rate limit handling)
