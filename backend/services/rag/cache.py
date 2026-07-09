@@ -9,6 +9,7 @@ Search order:
 
 import json
 import hashlib
+import threading
 import time
 import logging
 import os
@@ -24,10 +25,51 @@ _redis_client = None
 _faiss_index = None
 _cache_metadata = {}
 _embedding_fn = None
+_vector_size_cache = None
+
+# Guards all read/modify/write access to _faiss_index and _cache_metadata.
+# Both lookup_semantic (read) and store/_rebuild_faiss_index (write) can be
+# called concurrently under FastAPI/uvicorn, and ntotal-based indexing into
+# _cache_metadata is not safe without this.
+_faiss_lock = threading.Lock()
+
+# How many neighbors to pull back before filtering by tenant. A single
+# global FAISS index holds every tenant's cached queries, so a raw top-1
+# search can return another tenant's cache entry. We over-fetch and filter.
+_SEMANTIC_SEARCH_K = 10
 
 
 def _vector_size() -> int:
-    return int(os.getenv("VECTOR_SIZE", "384"))
+    """Embedding dimension for the FAISS cache index.
+
+    Prefers the actual embedding model's output dimension so a mismatched
+    VECTOR_SIZE env var can't silently break semantic caching (previously,
+    a dimension mismatch was swallowed by a broad except in store() and only
+    ever showed up as a warning log). Falls back to VECTOR_SIZE / 384 only
+    if the model's dimension can't be determined.
+    """
+    global _vector_size_cache
+
+    if _vector_size_cache is not None:
+        return _vector_size_cache
+
+    try:
+        embed_fn = _get_embedding_fn()
+        dim = embed_fn.get_sentence_embedding_dimension()
+        if dim:
+            env_dim = os.getenv("VECTOR_SIZE")
+            if env_dim and int(env_dim) != dim:
+                logger.warning(
+                    f"VECTOR_SIZE env var ({env_dim}) does not match embedding "
+                    f"model dimension ({dim}); using the model's actual dimension."
+                )
+            _vector_size_cache = int(dim)
+            return _vector_size_cache
+    except Exception as e:
+        logger.debug(f"Could not determine embedding dimension from model: {e}")
+
+    _vector_size_cache = int(os.getenv("VECTOR_SIZE", "384"))
+    return _vector_size_cache
 
 
 def _get_redis():
@@ -138,7 +180,7 @@ def lookup_semantic(query: str, tenant_id: str = "default") -> Optional[CacheHit
 
     faiss_index = _get_faiss_index()
 
-    if faiss_index is None or faiss_index.ntotal == 0:
+    if faiss_index is None:
         return None
 
     try:
@@ -146,17 +188,37 @@ def lookup_semantic(query: str, tenant_id: str = "default") -> Optional[CacheHit
         prefixed = f"{config.embedding.query_prefix}{query}"
         query_vec = embed_fn.encode([prefixed], normalize_embeddings=True).astype(np.float32)
 
-        scores, indices = faiss_index.search(query_vec, 1)
-        best_score = float(scores[0][0])
-        best_idx = int(indices[0][0])
+        with _faiss_lock:
+            if faiss_index.ntotal == 0:
+                return None
 
-        if best_score >= config.cache.semantic_cache_threshold and best_idx in _cache_metadata:
-            meta = _cache_metadata[best_idx]
-            age = time.time() - meta.get("timestamp", 0)
+            k = min(_SEMANTIC_SEARCH_K, faiss_index.ntotal)
+            scores, indices = faiss_index.search(query_vec, k)
 
-            if age < config.cache.semantic_cache_ttl:
-                logger.debug(f"Semantic cache hit (score={best_score:.3f}): {query[:50]}")
-                return CacheHit(meta["response"], "semantic", latency_saved_ms=age * 1000)
+            now = time.time()
+            ttl = config.cache.semantic_cache_ttl
+
+            # Walk neighbors in score order; take the first that belongs to
+            # this tenant, is still known, and hasn't expired. This is what
+            # keeps one tenant's semantic cache from being polluted by, or
+            # leaking into, another tenant's queries.
+            for score, idx in zip(scores[0], indices[0]):
+                idx = int(idx)
+                if idx < 0:
+                    continue
+                if float(score) < config.cache.semantic_cache_threshold:
+                    break  # scores are sorted descending; no point continuing
+
+                meta = _cache_metadata.get(idx)
+                if meta is None:
+                    continue
+                if meta.get("tenant_id") != tenant_id:
+                    continue
+
+                age = now - meta.get("timestamp", 0)
+                if age < ttl:
+                    logger.debug(f"Semantic cache hit (score={float(score):.3f}): {query[:50]}")
+                    return CacheHit(meta["response"], "semantic", latency_saved_ms=age * 1000)
 
     except Exception as e:
         logger.warning(f"Semantic cache lookup error: {e}")
@@ -203,11 +265,14 @@ def store(query: str, response: Dict, tenant_id: str = "default"):
             prefixed = f"{config.embedding.query_prefix}{query}"
             query_vec = embed_fn.encode([prefixed], normalize_embeddings=True).astype(np.float32)
 
-            idx = faiss_index.ntotal
-            faiss_index.add(query_vec)
-            _cache_metadata[idx] = cache_data
+            with _faiss_lock:
+                idx = faiss_index.ntotal
+                faiss_index.add(query_vec)
+                _cache_metadata[idx] = cache_data
 
-            if faiss_index.ntotal > config.cache.faiss_cache_index_size:
+                needs_rebuild = faiss_index.ntotal > config.cache.faiss_cache_index_size
+
+            if needs_rebuild:
                 _rebuild_faiss_index()
 
         except Exception as e:
@@ -224,31 +289,30 @@ def _rebuild_faiss_index():
     now = time.time()
     ttl = config.cache.semantic_cache_ttl
 
-    valid_entries = []
+    with _faiss_lock:
+        valid_entries = [
+            meta for meta in _cache_metadata.values()
+            if now - meta.get("timestamp", 0) < ttl
+        ]
 
-    for _, meta in _cache_metadata.items():
-        age = now - meta.get("timestamp", 0)
+        dim = _vector_size()
+        new_index = faiss.IndexFlatIP(dim)
+        new_metadata = {}
 
-        if age < ttl:
-            valid_entries.append(meta)
+        if valid_entries:
+            embed_fn = _get_embedding_fn()
+            queries = [f"{config.embedding.query_prefix}{entry['query']}" for entry in valid_entries]
+            vecs = embed_fn.encode(queries, normalize_embeddings=True).astype(np.float32)
 
-    _cache_metadata.clear()
+            new_index.add(vecs)
 
-    dim = _vector_size()
-    new_index = faiss.IndexFlatIP(dim)
+            for i, entry in enumerate(valid_entries):
+                new_metadata[i] = entry
 
-    if valid_entries:
-        embed_fn = _get_embedding_fn()
-        queries = [f"{config.embedding.query_prefix}{entry['query']}" for entry in valid_entries]
-        vecs = embed_fn.encode(queries, normalize_embeddings=True).astype(np.float32)
-
-        new_index.add(vecs)
-
-        for i, entry in enumerate(valid_entries):
-            _cache_metadata[i] = entry
-
-    global _faiss_index
-    _faiss_index = new_index
+        global _faiss_index
+        _faiss_index = new_index
+        _cache_metadata.clear()
+        _cache_metadata.update(new_metadata)
 
     logger.info(f"FAISS cache rebuilt: {new_index.ntotal} valid entries")
 
@@ -266,8 +330,13 @@ def get_cache_stats() -> Dict[str, Any]:
 
     if redis:
         try:
-            keys = redis.keys("rag:cache:*")
-            stats["redis_entries"] = len(keys)
+            # SCAN instead of KEYS: KEYS blocks Redis for the full scan
+            # duration, which is a real risk once the keyspace is large and
+            # this endpoint is polled by a dashboard/monitoring job.
+            count = 0
+            for _ in redis.scan_iter(match="rag:cache:*", count=500):
+                count += 1
+            stats["redis_entries"] = count
         except Exception:
             stats["redis_entries"] = "unknown"
 
