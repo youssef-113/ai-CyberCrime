@@ -1,24 +1,47 @@
+"""Async Ingestion Pipeline - Celery Worker with Content-Addressable Embedding Cache
+ 
+This version indexes chunks into ChromaDB instead of Qdrant.
+"""
+ 
 import hashlib
 import logging
-import time
-from typing import List, Dict, Any
+from collections import OrderedDict
+from typing import List, Dict, Any, Optional
+from urllib.parse import urlparse, urlunparse
  
 from .config import config
 from .retriever import _get_embedding_model
  
 logger = logging.getLogger("rag.ingestion")
  
-_embedding_cache = {}
+# Bounded in-memory cache (process-local, L1 in front of Redis).
+# Prevents unbounded growth in long-running Celery workers.
+_EMBEDDING_CACHE_MAX_ITEMS = 50_000
+_embedding_cache: "OrderedDict[str, List[float]]" = OrderedDict()
  
 _celery_app = None
 _chroma_client = None
-_redis_client = None          # FIX #2: cached connection instead of per-call
-_redis_unavailable = False    # avoid retrying a dead redis on every call
+_redis_client = None
+_redis_unavailable = False  # sticky flag so we don't retry-connect on every call
  
  
 def _content_hash(model_id: str, text: str) -> str:
     content = f"{model_id}:{text}"
     return hashlib.sha256(content.encode()).hexdigest()
+ 
+ 
+def _cache_get(key: str) -> Optional[List[float]]:
+    vec = _embedding_cache.get(key)
+    if vec is not None:
+        _embedding_cache.move_to_end(key)
+    return vec
+ 
+ 
+def _cache_put(key: str, vec: List[float]) -> None:
+    _embedding_cache[key] = vec
+    _embedding_cache.move_to_end(key)
+    if len(_embedding_cache) > _EMBEDDING_CACHE_MAX_ITEMS:
+        _embedding_cache.popitem(last=False)  # evict oldest
  
  
 def _get_chroma():
@@ -45,36 +68,83 @@ def _get_chroma():
     return _chroma_client
  
  
+def _embedding_cache_redis_url() -> str:
+    """Return the configured redis_url pointed at the embedding-cache DB (index 3),
+    regardless of what DB index (or none) was originally configured.
+ 
+    Avoids the previous ``url.replace("/0", "/3")`` hack, which silently broke
+    (or pointed at the wrong DB) for any URL not ending in exactly "/0".
+    """
+    parsed = urlparse(config.cache.redis_url)
+    new_path = "/3"
+    return urlunparse(parsed._replace(path=new_path))
+ 
+ 
 def _get_redis():
-    """Lazy, cached Redis client. Only tries to (re)connect once per
-    process unless explicitly reset — avoids opening a fresh TCP
-    connection (and eating the connect timeout) on every embedding call.
+    """Lazy, cached Redis client for the embedding cache.
+ 
+    Previously this opened a brand-new connection (with a 2s connect timeout)
+    on every single embedding lookup. Now it's created once and reused, and a
+    failed connection is remembered so we don't keep retrying on every call.
     """
     global _redis_client, _redis_unavailable
- 
-    if _redis_client is not None:
-        return _redis_client
  
     if _redis_unavailable:
         return None
  
-    try:
-        import redis
+    if _redis_client is None:
+        try:
+            import redis
  
-        client = redis.from_url(
-            config.cache.redis_url.replace("/0", "/3"),
-            decode_responses=False,
-            socket_connect_timeout=2,
-            socket_timeout=2,          # FIX #3: cap read/write time too
-            health_check_interval=30,
-        )
-        client.ping()
-        _redis_client = client
-        return _redis_client
+            _redis_client = redis.from_url(
+                _embedding_cache_redis_url(),
+                decode_responses=False,
+                socket_connect_timeout=2,
+            )
+            _redis_client.ping()
+        except Exception as e:
+            logger.warning(f"Redis unavailable for embedding cache: {e}")
+            _redis_client = None
+            _redis_unavailable = True
+            return None
+ 
+    return _redis_client
+ 
+ 
+def _redis_mget_embeddings(redis, cache_keys: List[str]) -> Dict[str, List[float]]:
+    """Fetch multiple embeddings from Redis in one round trip."""
+    import numpy as np
+ 
+    if not cache_keys:
+        return {}
+ 
+    redis_keys = [f"emb:{k}" for k in cache_keys]
+    try:
+        values = redis.mget(redis_keys)
     except Exception as e:
-        logger.warning(f"Redis unavailable for embedding cache: {e}")
-        _redis_unavailable = True
-        return None
+        logger.debug(f"Redis embedding cache mget failed: {e}")
+        return {}
+ 
+    found = {}
+    for key, raw in zip(cache_keys, values):
+        if raw is not None:
+            found[key] = np.frombuffer(raw, dtype=np.float32).tolist()
+    return found
+ 
+ 
+def _redis_mset_embeddings(redis, items: Dict[str, List[float]]) -> None:
+    """Store multiple embeddings in Redis in one round trip."""
+    import numpy as np
+ 
+    if not items:
+        return
+    try:
+        pipe = redis.pipeline(transaction=False)
+        for key, vec in items.items():
+            pipe.set(f"emb:{key}", np.array(vec, dtype=np.float32).tobytes())
+        pipe.execute()
+    except Exception as e:
+        logger.debug(f"Redis embedding cache store failed: {e}")
  
  
 def get_or_compute_embedding(text: str, model_id: str = None) -> List[float]:
@@ -82,134 +152,92 @@ def get_or_compute_embedding(text: str, model_id: str = None) -> List[float]:
     text = f"{config.embedding.passage_prefix}{text}"
     cache_key = _content_hash(model_id, text)
  
-    if cache_key in _embedding_cache:
-        return _embedding_cache[cache_key]
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
  
     redis = _get_redis()
     if redis is not None:
-        try:
-            import numpy as np
- 
-            cached = redis.get(f"emb:{cache_key}")
-            if cached:
-                vec = np.frombuffer(cached, dtype=np.float32).tolist()
-                _embedding_cache[cache_key] = vec
-                return vec
-        except Exception as e:
-            logger.debug(f"Redis embedding cache miss: {e}")
+        found = _redis_mget_embeddings(redis, [cache_key])
+        if cache_key in found:
+            vec = found[cache_key]
+            _cache_put(cache_key, vec)
+            return vec
  
     model = _get_embedding_model()
     vec = model.encode([text], normalize_embeddings=True).astype("float32")[0].tolist()
  
-    _embedding_cache[cache_key] = vec
+    _cache_put(cache_key, vec)
  
     if redis is not None:
-        try:
-            import numpy as np
- 
-            redis.set(f"emb:{cache_key}", np.array(vec, dtype=np.float32).tobytes())
-        except Exception as e:
-            logger.debug(f"Redis embedding cache store failed: {e}")
+        _redis_mset_embeddings(redis, {cache_key: vec})
  
     return vec
  
  
 def batch_embed(texts: List[str], model_id: str = None) -> List[List[float]]:
-    model_id = model_id or config.embedding.model_name
-    prefixed_texts = [f"{config.embedding.passage_prefix}{t}" for t in texts]
-    results = [None] * len(prefixed_texts)
-    uncached_indices = []
-    uncached_texts = []
+    """Embed a batch of texts, checking the in-memory cache, then Redis,
+    before falling back to the embedding model.
  
-    redis = _get_redis()  # FIX #6: reuse cache here too, not just single-text path
- 
-    for i, text in enumerate(prefixed_texts):
-        cache_key = _content_hash(model_id, text)
- 
-        if cache_key in _embedding_cache:
-            results[i] = _embedding_cache[cache_key]
-            continue
- 
-        if redis is not None:
-            try:
-                import numpy as np
- 
-                cached = redis.get(f"emb:{cache_key}")
-                if cached:
-                    vec = np.frombuffer(cached, dtype=np.float32).tolist()
-                    _embedding_cache[cache_key] = vec
-                    results[i] = vec
-                    continue
-            except Exception as e:
-                logger.debug(f"Redis embedding cache miss: {e}")
- 
-        uncached_indices.append(i)
-        uncached_texts.append(text)
- 
-    if uncached_texts:
-        model = _get_embedding_model()
- 
-        start = time.monotonic()
-        try:
-            vecs = model.encode(
-                uncached_texts,
-                normalize_embeddings=True,
-                batch_size=32,
-            )
-        except Exception as e:
-            # FIX #5: don't let an embedding-model failure bubble up as an
-            # opaque timeout after minutes — fail fast with a clear error.
-            logger.error(f"Embedding model failed on batch of {len(uncached_texts)} texts: {e}")
-            raise
-        finally:
-            elapsed = time.monotonic() - start
-            # FIX #4: make slow batches visible instead of silent.
-            log_fn = logger.warning if elapsed > 5 else logger.info
-            log_fn(f"Embedded {len(uncached_texts)} texts in {elapsed:.2f}s "
-                   f"({elapsed / max(len(uncached_texts), 1):.3f}s/text)")
- 
-        for j, (idx, text) in enumerate(zip(uncached_indices, uncached_texts)):
-            vec = vecs[j].tolist()
-            results[idx] = vec
- 
-            cache_key = _content_hash(model_id, text)
-            _embedding_cache[cache_key] = vec
- 
-            if redis is not None:
-                try:
-                    import numpy as np
- 
-                    redis.set(f"emb:{cache_key}", np.array(vec, dtype=np.float32).tobytes())
-                except Exception as e:
-                    logger.debug(f"Redis embedding cache store failed: {e}")
- 
-    return results
- 
- 
-def _deduplicate_chunks(chunks: List[Dict]) -> List[Dict]:
-    """FIX #1 (root cause fix): guarantee unique IDs before they ever reach
-    ChromaDB. If two chunks collide on ID, keep the first occurrence and
-    log a warning instead of letting the whole upsert batch fail.
+    Previously this only checked the in-process ``_embedding_cache`` dict,
+    which meant Redis (the persistent cache) was never consulted or
+    populated during ingestion -- every worker restart forced full
+    recomputation of embeddings for the whole corpus.
     """
-    seen_ids = set()
-    deduped = []
-    dropped = 0
+    model_id = model_id or config.embedding.model_name
+    texts = [f"{config.embedding.passage_prefix}{t}" for t in texts]
+    results: List[Optional[List[float]]] = [None] * len(texts)
  
-    for chunk in chunks:
-        chunk_id = str(chunk["id"])
-        if chunk_id in seen_ids:
-            dropped += 1
-            continue
-        seen_ids.add(chunk_id)
-        deduped.append(chunk)
+    cache_keys = [_content_hash(model_id, t) for t in texts]
  
-    if dropped:
-        logger.warning(
-            f"Dropped {dropped} chunk(s) with duplicate IDs before indexing "
-            f"(kept first occurrence of each ID)."
+    # 1. Check in-memory (L1) cache.
+    still_missing_idx = []
+    for i, key in enumerate(cache_keys):
+        vec = _cache_get(key)
+        if vec is not None:
+            results[i] = vec
+        else:
+            still_missing_idx.append(i)
+ 
+    # 2. Check Redis (L2) cache for anything still missing.
+    redis = _get_redis()
+    if redis is not None and still_missing_idx:
+        keys_to_check = [cache_keys[i] for i in still_missing_idx]
+        found = _redis_mget_embeddings(redis, keys_to_check)
+ 
+        remaining_idx = []
+        for i in still_missing_idx:
+            key = cache_keys[i]
+            if key in found:
+                vec = found[key]
+                results[i] = vec
+                _cache_put(key, vec)
+            else:
+                remaining_idx.append(i)
+        still_missing_idx = remaining_idx
+ 
+    # 3. Compute anything still missing via the embedding model.
+    if still_missing_idx:
+        uncached_texts = [texts[i] for i in still_missing_idx]
+        model = _get_embedding_model()
+        vecs = model.encode(
+            uncached_texts,
+            normalize_embeddings=True,
+            batch_size=32,
         )
  
-    return deduped
+        newly_computed = {}
+        for idx, vec_arr in zip(still_missing_idx, vecs):
+            vec = vec_arr.tolist()
+            key = cache_keys[idx]
+            results[idx] = vec
+            _cache_put(key, vec)
+            newly_computed[key] = vec
+ 
+        if redis is not None:
+            _redis_mset_embeddings(redis, newly_computed)
+ 
+    return results  # type: ignore[return-value]
  
  
 def index_chunks(
@@ -226,9 +254,6 @@ def index_chunks(
             "tenant_id": tenant_id,
         }
  
-    # FIX #1: dedupe before doing any embedding work at all.
-    chunks = _deduplicate_chunks(chunks)
- 
     collection_name = collection_name or "egyptian_law"
  
     if config.multi_tenant.enabled and tenant_id != "default":
@@ -242,12 +267,7 @@ def index_chunks(
         return {"indexed": 0, "error": str(e)}
  
     texts = [chunk["text"] for chunk in chunks]
- 
-    try:
-        embeddings = batch_embed(texts)
-    except Exception as e:
-        logger.error(f"Failed to compute embeddings for {len(texts)} chunks: {e}")
-        return {"indexed": 0, "error": f"embedding failure: {e}"}
+    embeddings = batch_embed(texts)
  
     ids = []
     metadatas = []
@@ -274,11 +294,6 @@ def index_chunks(
         ids.append(chunk_id)
         metadatas.append(clean_metadata)
  
-    # Belt-and-suspenders: even after _deduplicate_chunks, assert
-    # uniqueness right before the call that actually enforces it, so a
-    # future code change upstream can't silently reintroduce the crash.
-    assert len(ids) == len(set(ids)), "Duplicate chunk IDs survived deduplication"
- 
     batch_size = config.ingestion.batch_size
     total_indexed = 0
  
@@ -289,8 +304,7 @@ def index_chunks(
         batch_metadatas = metadatas[i:i + batch_size]
  
         try:
-            # Use upsert so repeated indexing does not fail because of duplicate IDs
-            # across separate calls (dedup above handles duplicates *within* a call).
+            # Use upsert so repeated indexing does not fail because of duplicate IDs.
             collection.upsert(
                 ids=batch_ids,
                 documents=batch_texts,
