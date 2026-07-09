@@ -112,7 +112,7 @@ def health():
     try:
         from .retriever import get_retriever_stats
         chroma_stats = get_retriever_stats()
-        chroma_ok    = chroma_stats.get("collection") is not None or True
+        chroma_ok    = chroma_stats.get("status") == "ok"
     except Exception as e:
         chroma_stats = {"error": str(e)}
         chroma_ok    = False
