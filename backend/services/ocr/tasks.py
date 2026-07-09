@@ -101,7 +101,6 @@ def _store_cached(content: bytes, result: Dict, ttl: int = 3600) -> None:
 def _build_config():
     from .ocr_engine import OCRConfig
     return OCRConfig(
-        chandra_confidence_threshold=float(os.getenv("CHANDRA_CONFIDENCE_THRESHOLD", "0.85")),
         paddle_confidence_threshold=float(os.getenv("PADDLE_CONFIDENCE_THRESHOLD",  "0.80")),
         use_preprocessing=True,
         target_width=800,

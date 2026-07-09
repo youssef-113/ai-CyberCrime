@@ -47,7 +47,6 @@ export default function ChatbotPage() {
     const trimmed = input.trim()
     if (!trimmed || loading) return
     setInput('')
-    alerts.chatSent()
     await sendMessage(trimmed)
     inputRef.current?.focus()
   }

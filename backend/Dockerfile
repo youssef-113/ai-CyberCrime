@@ -45,7 +45,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 
 # ── Pre-download Models (speeds up first request) ────────────────────────────
-RUN python -c "from chandra_ocr import ChandraOCR; ChandraOCR(langs=['ar','en'])" || true
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')" 2>&1
 
 # ── Expose Port ─────────────────────────────────────────────────────────────────

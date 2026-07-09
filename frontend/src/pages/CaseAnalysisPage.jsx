@@ -92,7 +92,6 @@ export default function CaseAnalysisPage() {
 
     setPipelineStep(0)
     setResult(null)
-    alerts.analysisStart()
 
     try {
       const data = await analyze(files, false)
@@ -274,12 +273,10 @@ function ResultView({ result, onDownload, onReset, downloading }) {
 
   // ── OCR engine display helpers ──────────────────────────────────────────
   const ENGINE_LABELS = {
-    chandra_ocr2:       { en: 'Chandra OCR 2',         ar: 'Chandra OCR 2 (أساسي)' },
+    groq_vision:        { en: 'Groq Vision API',        ar: 'Groq Vision API (أساسي)' },
     paddleocr:          { en: 'PaddleOCR (fallback)',   ar: 'PaddleOCR (بديل)'      },
     groq_understanding: { en: 'Groq AI (layer 3)',      ar: 'Groq AI (طبقة الفهم)'  },
     text_file:          { en: 'Text file (direct)',     ar: 'ملف نصي (مباشر)'       },
-    // Legacy labels kept for backward compat with old results
-    easyocr:            { en: 'EasyOCR (legacy)',       ar: 'EasyOCR (قديم)'        },
     none:               { en: 'None',                   ar: 'لا يوجد'               },
   }
   const _engineLabel = (eng) => {
@@ -290,7 +287,7 @@ function ResultView({ result, onDownload, onReset, downloading }) {
   // Safe helpers for nested OCR data
   const ocrConf     = result.ocr?.avg_confidence ?? result.ocr_confidence ?? 0
   const ocrPerFile  = result.ocr?.per_file || []
-  const ocrEngine   = ocrPerFile[0]?.engine || result.ocr?.engine_used || 'chandra_ocr2'
+  const ocrEngine   = ocrPerFile[0]?.engine || result.ocr?.engine_used || 'groq_vision'
   const ocrLang     = ocrPerFile[0]?.language || result.language || 'en'
   const ocrFallback = ocrPerFile.some(f => f.fallback_triggered)
   const ocrGroqUsed = ocrPerFile.some(f => f.engine === 'groq_understanding') ||
@@ -419,7 +416,7 @@ function ResultView({ result, onDownload, onReset, downloading }) {
                     ? (ocrGroqUsed
                         ? (language === 'ar' ? 'نعم — Groq AI (طبقة 3)' : 'Yes — Groq AI (tier 3)')
                         : (language === 'ar' ? 'نعم — PaddleOCR (طبقة 2)' : 'Yes — PaddleOCR (tier 2)'))
-                    : (language === 'ar' ? 'لا — Chandra OCR 2 كافٍ' : 'No — Chandra OCR 2 sufficient')
+                    : (language === 'ar' ? 'لا — Groq Vision API كافٍ' : 'No — Groq Vision API sufficient')
                   }
                 </p>
               </div>

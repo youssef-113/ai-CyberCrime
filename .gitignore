@@ -18,6 +18,7 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 data/law_db/
+**/data/law_db/
 outputs/
 qdrant_storage/
 assist/

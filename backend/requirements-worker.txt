@@ -10,7 +10,6 @@ sentence-transformers>=2.2.0
 huggingface-hub>=0.19.0
 
 # ── OCR Engines (lazy-loaded; needed by worker OCR queue) ──
-chandra-ocr>=0.2.0
 paddleocr>=2.7.0
 paddlepaddle>=2.6.0
 

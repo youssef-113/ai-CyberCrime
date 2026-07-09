@@ -39,9 +39,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # ── Application Code ──
 COPY . .
 
-# ── Pre-download OCR Models (speeds up first request) ──
-RUN python -c "from chandra_ocr import ChandraOCR; ChandraOCR(langs=['ar','en'])" || true
-
 # ── Run Celery Worker ──
 # Command is provided by docker-compose.yml
 CMD ["celery", "-A", "services.common.celery_app", "worker", "--loglevel=info", "--concurrency=2"]

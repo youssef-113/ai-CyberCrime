@@ -29,10 +29,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# ── Pre-download Chandra OCR 2 model weights ──────────────────────────────────
-# (Runs at build time so first request isn't slow)
-RUN python -c "from chandra_ocr import ChandraOCR; ChandraOCR(langs=['ar','en'])" || true
-
 # ── Pre-download PaddleOCR Arabic model ──────────────────────────────────────
 RUN python -c "from paddleocr import PaddleOCR; PaddleOCR(use_angle_cls=True, lang='ar', show_log=False)" || true
 

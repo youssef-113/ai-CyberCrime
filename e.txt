@@ -15,8 +15,9 @@ LLM_PROVIDER=ollama
 
 
 GROQ_API_URL=https://api.groq.com/openai/v1/chat/completions
-GROQ_API_KEY= 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
+GROQ_API_KEY=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
 GROQ_MODEL=llama-3.1-8b-instant
+GROQ_VISION_MODEL=llama-3.2-11b-vision-preview
 GROQ_TIMEOUT=20
 
 # Fallback: Second Groq API key (for rate limit handling)
@@ -124,7 +125,7 @@ MAX_UPLOAD_SIZE_BYTES=10485760  # 10MB
 MAX_UPLOAD_FILES=5
 
 
-CHANDRA_CONFIDENCE_THRESHOLD=0.85
+GROQ_VISION_CONFIDENCE=0.90
 PADDLE_CONFIDENCE_THRESHOLD=0.80
 # Security limits
 MAX_FILE_SIZE_BYTES=10485760     # 10 MB

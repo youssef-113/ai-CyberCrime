@@ -1,6 +1,6 @@
 """
 Pydantic models for OCR Service v2
-Supports: Chandra OCR 2 | PaddleOCR | Groq AI understanding layer
+Supports: Groq Vision API | PaddleOCR | Groq AI understanding layer
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ class EvidenceBlock(BaseModel):
     normalized_text: str
     confidence:      float = Field(ge=0.0, le=1.0)
     quality_flag:    str   # OK | LOW_CONFIDENCE | FALLBACK_USED
-    ocr_source:      str   # chandra_ocr2 | paddleocr | groq_understanding | text_file
+    ocr_source:      str   # groq_vision | paddleocr | groq_understanding | text_file
     bbox:            Optional[List[float]] = None  # [x1, y1, x2, y2]
 
 
@@ -46,7 +46,7 @@ class OCRResult(BaseModel):
     text:              str
     confidence:        float
     blocks:            List[EvidenceBlock]
-    engine:            str   # chandra_ocr2 | paddleocr | groq_understanding | none
+    engine:            str   # groq_vision | paddleocr | groq_understanding | none
     confidence_score:  Optional[ConfidenceScore] = None
     fallback_triggered: bool = False
     # Populated when Groq understanding layer ran
@@ -106,7 +106,6 @@ class EngineStats(BaseModel):
 class OCRMetrics(BaseModel):
     """Runtime metrics snapshot from the OCR engine"""
     total_requests:  int
-    chandra_used:    int
     paddle_used:     int
     groq_used:       int
     errors:          int
