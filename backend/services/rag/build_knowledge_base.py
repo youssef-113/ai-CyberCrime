@@ -1,85 +1,136 @@
-"""Build knowledge base from law articles - ChromaDB with Rich Metadata
+"""Build a ChromaDB knowledge base from validated law article JSON."""
 
-Each chunk includes:
-- Short 1-2 line summary
-- Keywords
-- Source document info
-- Parent-child relationships for context expansion
-"""
+import argparse
 import json
-import os
-import sys
 import logging
+import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("rag.build_kb")
 
 
-def build_knowledge_base(
-    articles_path: str = None,
-    tenant_id: str = "default",
-):
-    """Index law articles into ChromaDB with rich metadata and parent-child chunking."""
-    from .ingestion import index_articles
+def _default_articles_path() -> Path:
+    env_path = os.getenv("ARTICLES_PATH")
+    if env_path:
+        return Path(env_path).expanduser().resolve()
 
-    articles_path = articles_path or os.getenv(
-        "ARTICLES_PATH",
-        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "data", "law", "articles.json")
-    )
+    project_root = Path(__file__).resolve().parents[3]
+    return project_root / "data" / "law" / "articles.json"
+
+
+def _load_articles(path: Path) -> List[Dict[str, Any]]:
+    if not path.exists():
+        raise FileNotFoundError(f"Articles file does not exist: {path}")
+    if not path.is_file():
+        raise ValueError(f"Articles path is not a file: {path}")
 
     try:
-        with open(articles_path, "r", encoding="utf-8") as f:
-            articles = json.load(f)
-        logger.info(f"Loaded {len(articles)} articles from {articles_path}")
-    except FileNotFoundError:
-        logger.warning("No articles.json found. Creating sample data...")
-        articles = [
-            {
-                "article_id": "law175_art25",
-                "article_number": "25",
-                "law": "Law 175/2018",
-                "crime_type": "unauthorized_access",
-                "text_ar": "",
-                "text_en": "",
-                "text": "Punishment by imprisonment and fine for unauthorized access to information systems",
-                "title_ar": "الدخول غير المصرح به في أنظمة المعلومات",
-                "title_en": "Unauthorized Access to Information Systems",
-                "penalty_ar": "الحبس و الغرامة",
-                "keywords": ["unauthorized access", "information systems", "hacking", "الدخول غير المصرح"],
-                "source_file": "sample",
-            },
-            {
-                "article_id": "law175_art26",
-                "article_number": "26",
-                "law": "Law 175/2018",
-                "crime_type": "interception",
-                "text_ar": "",
-                "text_en": "",
-                "text": "Punishment for illegal interception of communications",
-                "title_ar": "اعتراض الاتصالات غير القانوني",
-                "title_en": "Illegal Interception of Communications",
-                "penalty_ar": "الحبس مدة لا تقل عن سنة",
-                "keywords": ["interception", "communications", "eavesdropping", "اعتراض"],
-                "source_file": "sample",
-            },
-        ]
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in {path}: {exc}") from exc
 
-    for article in articles:
-        if not article.get("text"):
-            article["text"] = article.get("text_ar", "") or article.get("text_en", "") or ""
+    if isinstance(payload, dict) and isinstance(payload.get("articles"), list):
+        payload = payload["articles"]
 
-        if not article.get("summary"):
-            article["summary"] = article.get("title_ar", "") or article.get("title_en", "") or ""
+    if not isinstance(payload, list):
+        raise ValueError("Articles JSON must be a list or an object containing an 'articles' list")
 
-        if not article.get("keywords"):
-            article["keywords"] = []
+    return payload
 
-    result = index_articles(articles, tenant_id=tenant_id)
 
-    logger.info(f"Build complete: {result}")
+def _prepare_articles(
+    articles: List[Dict[str, Any]],
+) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    valid: List[Dict[str, Any]] = []
+    invalid: List[Dict[str, Any]] = []
+
+    for index, raw_article in enumerate(articles):
+        if not isinstance(raw_article, dict):
+            invalid.append({"index": index, "reason": "Article must be an object"})
+            continue
+
+        article = dict(raw_article)
+        article_number = str(article.get("article_number") or "").strip()
+        law = str(article.get("law") or "").strip()
+        has_text = any(
+            str(article.get(field) or "").strip()
+            for field in ("text_ar", "text_en", "text")
+        )
+
+        missing = []
+        if not article_number:
+            missing.append("article_number")
+        if not law:
+            missing.append("law")
+        if not has_text:
+            missing.append("text_ar/text_en/text")
+
+        if missing:
+            invalid.append(
+                {
+                    "index": index,
+                    "article_number": article_number,
+                    "reason": f"Missing required fields: {', '.join(missing)}",
+                }
+            )
+            continue
+
+        article.setdefault("article_id", f"{law}:{article_number}")
+        article.setdefault(
+            "summary",
+            article.get("title_ar") or article.get("title_en") or "",
+        )
+        article["keywords"] = article.get("keywords") or []
+        valid.append(article)
+
+    return valid, invalid
+
+
+def build_knowledge_base(
+    articles_path: Optional[str] = None,
+    tenant_id: str = "default",
+) -> Dict[str, Any]:
+    from .ingestion import index_articles
+
+    path = Path(articles_path).expanduser().resolve() if articles_path else _default_articles_path()
+    loaded_articles = _load_articles(path)
+    valid_articles, invalid_articles = _prepare_articles(loaded_articles)
+
+    if not valid_articles:
+        raise ValueError("No valid law articles were found; indexing was not started")
+
+    logger.info(
+        "Loaded %s articles from %s; valid=%s invalid=%s tenant=%s",
+        len(loaded_articles),
+        path,
+        len(valid_articles),
+        len(invalid_articles),
+        tenant_id,
+    )
+
+    result = index_articles(valid_articles, tenant_id=tenant_id)
+    result.update(
+        {
+            "source_path": str(path),
+            "articles_loaded": len(loaded_articles),
+            "articles_valid": len(valid_articles),
+            "articles_invalid": len(invalid_articles),
+            "invalid_articles": invalid_articles,
+        }
+    )
+    logger.info("Knowledge-base build completed: %s", result)
     return result
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build the RAG knowledge base")
+    parser.add_argument("articles_path", nargs="?", default=None)
+    parser.add_argument("--tenant-id", default="default")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    path = sys.argv[1] if len(sys.argv) > 1 else None
-    build_knowledge_base(articles_path=path)
+    logging.basicConfig(level=logging.INFO)
+    args = _parse_args()
+    build_knowledge_base(args.articles_path, tenant_id=args.tenant_id)

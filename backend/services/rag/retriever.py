@@ -75,19 +75,27 @@ def _get_collection(collection_name: str):
     return client.get_or_create_collection(name=collection_name)
 
 
-def _fetch_parent_text(collection, parent_id: str) -> Optional[str]:
-    if not parent_id:
-        return None
+def _fetch_parent_texts(collection, parent_ids: list) -> dict:
+    if not parent_ids:
+        return {}
 
     try:
-        result = collection.get(ids=[parent_id], include=["documents", "metadatas"])
-        documents = result.get("documents") or []
-        if documents:
-            return documents[0]
-    except Exception as e:
-        logger.warning(f"Failed to fetch parent chunk {parent_id}: {e}")
+        result = collection.get(
+            ids=list(set(parent_ids)),
+            include=["documents"],
+        )
 
-    return None
+        ids = result.get("ids") or []
+        docs = result.get("documents") or []
+
+        return {
+        str(pid): doc
+        for pid, doc in zip(ids, docs)
+        }
+
+    except Exception as e:
+        logger.warning(f"Failed to fetch parent chunks: {e}")
+        return {}
 
 
 def _vector_search(
@@ -129,6 +137,7 @@ def _vector_search(
     distances = raw_dist[0] if raw_dist and isinstance(raw_dist[0], list) else raw_dist
 
     retrieval_results = []
+    parent_ids=[]
 
     for idx, chunk_id in enumerate(ids):
         text = documents[idx] if idx < len(documents) else ""
@@ -138,8 +147,11 @@ def _vector_search(
         vector_score = 1.0 / (1.0 + float(distance))
 
         parent_text = None
-        if metadata.get("chunk_type") == "child" and metadata.get("parent_id"):
-            parent_text = _fetch_parent_text(collection, metadata.get("parent_id"))
+
+        if metadata.get("chunk_type") == "child":
+            parent_id = metadata.get("parent_id")
+            if parent_id:
+                parent_ids.append(parent_id)
 
         retrieval_results.append(
             RetrievalResult(
@@ -150,6 +162,12 @@ def _vector_search(
                 parent_text=parent_text,
             )
         )
+    parent_map = _fetch_parent_texts(collection, parent_ids)
+
+    for result in retrieval_results:
+        parent_id = result.metadata.get("parent_id")
+        if parent_id:
+            result.parent_text = parent_map.get(parent_id)
 
     logger.info(f"Vector search returned {len(retrieval_results)} results")
     return retrieval_results
@@ -217,8 +235,11 @@ def _normalize_arabic(text: str) -> str:
 def _strip_arabic_prefix(word: str) -> str:
     """Strip common Arabic prefixes like ال, و, ف, ب."""
     for prefix in _ARABIC_PREFIXES:
-        if word.startswith(prefix) and len(word) > len(prefix):
+        remaining = len(word) - len(prefix)
+
+        if word.startswith(prefix) and remaining >= 3:
             return word[len(prefix):]
+
     return word
 
 
@@ -240,14 +261,16 @@ def _count_arabic_chars(text: str) -> int:
     return sum(1 for c in text if '\u0600' <= c <= '\u06FF' or '\u0750' <= c <= '\u077F' or '\u08A0' <= c <= '\u08FF' or '\uFB50' <= c <= '\uFDFF' or '\uFE70' <= c <= '\uFEFF')
 
 
-def _keyword_search_all(query: str, collection_name: str, top_k: int, tenant_id: str) -> List[RetrievalResult]:
-    """Full keyword search across ALL articles in ChromaDB.
-    
-    Bypasses vector search entirely — fetches every chunk and scores by
-    keyword/term overlap.  Needed for Arabic queries where the English-only
-    embedding model produces random similarity scores.
-    """
+def _keyword_search_all(
+    query: str,
+    collection_name: str,
+    top_k: int,
+    tenant_id: str,
+) -> List[RetrievalResult]:
+    """Search all chunks using keyword overlap and fetch parents in one batch."""
+
     collection = _get_collection(collection_name)
+
     total = collection.count()
     if total == 0:
         return []
@@ -256,42 +279,104 @@ def _keyword_search_all(query: str, collection_name: str, top_k: int, tenant_id:
         include=["documents", "metadatas"],
         limit=total,
     )
-    ids = all_data.get("ids", [])
-    documents = all_data.get("documents", []) or []
-    metadatas = all_data.get("metadatas", []) or []
+
+    ids = all_data.get("ids") or []
+    documents = all_data.get("documents") or []
+    metadatas = all_data.get("metadatas") or []
 
     query_terms = _tokenize(query)
     if not query_terms:
         return []
 
-    scored = []
+    scored_raw = []
+    parent_ids = []
+
     for idx, chunk_id in enumerate(ids):
         text = documents[idx] if idx < len(documents) else ""
-        meta = metadatas[idx] if idx < len(metadatas) and metadatas[idx] else {}
 
-        # Score by term overlap in text + keywords (keywords weighted 3x)
+        meta = (
+            metadatas[idx]
+            if idx < len(metadatas) and metadatas[idx]
+            else {}
+        )
+
         text_terms = _tokenize(text) if text else set()
-        kw_terms = _tokenize(' '.join(_keywords_to_set(meta.get("keywords", ""))))
+
+        keyword_terms = _tokenize(
+            " ".join(
+                _keywords_to_set(
+                    meta.get("keywords", "")
+                )
+            )
+        )
+
         score = len(query_terms & text_terms)
-        score += len(query_terms & kw_terms) * 3
+        score += len(query_terms & keyword_terms) * 3
 
-        if score > 0:
-            parent_text = None
-            if meta.get("chunk_type") == "child" and meta.get("parent_id"):
-                parent_text = _fetch_parent_text(collection, meta.get("parent_id"))
+        if score <= 0:
+            continue
 
-            scored.append(RetrievalResult(
+        parent_id = meta.get("parent_id")
+
+        if (
+            meta.get("chunk_type") == "child"
+            and parent_id
+        ):
+            parent_ids.append(str(parent_id))
+
+        scored_raw.append(
+            (
+                chunk_id,
+                text,
+                meta,
+                score,
+            )
+        )
+
+    # استدعاء واحد فقط إلى ChromaDB لجميع الـ parents
+    parent_map = _fetch_parent_texts(
+        collection,
+        parent_ids,
+    )
+
+    scored = []
+
+    for chunk_id, text, meta, score in scored_raw:
+        parent_text = None
+        parent_id = meta.get("parent_id")
+
+        if (
+            meta.get("chunk_type") == "child"
+            and parent_id
+        ):
+            parent_text = parent_map.get(
+                str(parent_id)
+            )
+
+        scored.append(
+            RetrievalResult(
                 id=str(chunk_id),
                 text=text,
                 metadata=meta,
-                combined_score=float(score) / float(len(query_terms)),
+                combined_score=(
+                    float(score)
+                    / float(len(query_terms))
+                ),
                 parent_text=parent_text,
-            ))
+            )
+        )
 
-    scored.sort(key=lambda r: r.combined_score, reverse=True)
-    logger.info(f"Keyword search: {len(scored)} of {total} chunks matched (arabic query)")
+    scored.sort(
+        key=lambda result: result.combined_score,
+        reverse=True,
+    )
+
+    logger.info(
+        f"Keyword search: {len(scored)} "
+        f"of {total} chunks matched"
+    )
+
     return scored[:top_k]
-
 
 def hybrid_retrieve(
     query: str,
@@ -301,6 +386,7 @@ def hybrid_retrieve(
 ) -> List[RetrievalResult]:
 
     top_k = top_k or config.retriever.top_k
+    fetch_k=max(top_k*4, 20)
     collection_name = collection_name or config.chroma.collection_name
 
     if config.multi_tenant.enabled and tenant_id != "default":
@@ -310,7 +396,7 @@ def hybrid_retrieve(
     vector_results = _vector_search(
         query=query,
         collection_name=collection_name,
-        top_k=top_k,
+        top_k=fetch_k,
         tenant_id=tenant_id,
     )
 
@@ -351,7 +437,7 @@ def retrieve_and_validate(
     for r in results:
         meta = r.metadata or {}
         articles.append({
-            "article_number": meta.get("article_number") or meta.get("id") or "",
+            "article_number": meta.get("article_number") or "",
             "law": meta.get("law", ""),
             "text": r.text,
         })

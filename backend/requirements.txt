@@ -59,3 +59,5 @@ langgraph>=0.2.0
 # ── AI / LLM ──────────────────────────────────────────────────────────────────
 google-generativeai>=0.3.0
 groq>=0.12.0
+LLM_MODEL=qwen2.5:3b
+OLLAMA_MODEL=qwen2.5:3b

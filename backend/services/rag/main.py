@@ -15,7 +15,7 @@ import logging
 from typing import List, Optional, Dict, Any
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .config import config
 
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/rag")
 class RetrieveRequest(BaseModel):
     query: str
     crime_type: str = ""
-    top_k: int = 5
+    top_k: int = Field(default=5, ge=1, le=100)
     tenant_id: str = "default"
     transform_strategy: str = "auto"
     user_id: Optional[str] = None  # For retrieval_logs tracking
@@ -48,10 +48,10 @@ class LawArticle(BaseModel):
 
 
 class CitationValidationResult(BaseModel):
-    valid: List[Dict[str, Any]] = []
-    invalid: List[Dict[str, Any]] = []
+    valid: List[Dict[str, Any]] = Field(default_factory=list)
+    invalid: List[Dict[str, Any]] = Field(default_factory=list)
     status: str = "PASSED"  # PASSED | FAILED
-    validation_details: Dict[str, Any] = {}
+    validation_details: Dict[str, Any] = Field(default_factory=dict)
 
 
 class RetrieveResponse(BaseModel):
@@ -83,14 +83,19 @@ class IndexResponse(BaseModel):
 class FaithfulnessRequest(BaseModel):
     query: str
     answer: str
-    citations: List[Dict[str, Any]] = []
+    citations: List[Dict[str, Any]] = Field(default_factory=list)
+    tenant_id: str = "default"
+    request_id: Optional[str] = None
 
 
 class FaithfulnessResponse(BaseModel):
-    faithfulness_score: float
+    faithfulness_score: Optional[float] = None
     has_citations: bool
     num_citations: int
     hallucination_risk: str
+    evaluated: bool = True
+    citation_coverage: float = 0.0
+    uncertainty_detected: bool = False
 
 
 @router.get("/health")
@@ -111,11 +116,29 @@ def health():
 
     try:
         from .retriever import get_retriever_stats
+
         chroma_stats = get_retriever_stats()
-        chroma_ok    = chroma_stats.get("collection") is not None or True
+        collection_name = chroma_stats.get("collection")
+
+        document_count = chroma_stats.get("document_count")
+        if document_count is None:
+            document_count = chroma_stats.get("count")
+        if document_count is None:
+            document_count = chroma_stats.get("total_documents")
+
+        chroma_connected = True
+        chroma_collection_ready = bool(collection_name)
+        chroma_has_data = (
+            document_count is None
+            or (isinstance(document_count, (int, float)) and document_count > 0)
+        )
+        chroma_ok = chroma_connected and chroma_collection_ready and chroma_has_data
     except Exception as e:
         chroma_stats = {"error": str(e)}
-        chroma_ok    = False
+        chroma_connected = False
+        chroma_collection_ready = False
+        chroma_has_data = False
+        chroma_ok = False
 
     try:
         from services.common.celery_app import celery_app
@@ -132,14 +155,18 @@ def health():
 
     overall = "healthy" if chroma_ok else "degraded"
     return {
-        "status":     overall,
-        "service":    "rag",
-        "version":    "2.0.0",
-        "vector_db":  "chromadb",
-        "chroma":     "ok"          if chroma_ok  else "unavailable",
-        "redis":      "ok"          if redis_ok   else "unavailable",
-        "celery":     "ok"          if celery_ok  else "unavailable",
-        "metrics":    metrics_data,
+        "status": overall,
+        "service": "rag",
+        "version": "2.0.0",
+        "vector_db": "chromadb",
+        "chroma": "ok" if chroma_ok else "unavailable",
+        "chroma_connected": chroma_connected,
+        "chroma_collection_ready": chroma_collection_ready,
+        "chroma_has_data": chroma_has_data,
+        "chroma_stats": chroma_stats,
+        "redis": "ok" if redis_ok else "unavailable",
+        "celery": "ok" if celery_ok else "unavailable",
+        "metrics": metrics_data,
     }
 
 
@@ -224,39 +251,62 @@ async def retrieve(request: RetrieveRequest):
     try:
         from .retriever import retrieve_and_validate
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         retrieval_tasks = []
         for q in queries:
             retrieval_tasks.append(
-                loop.run_in_executor(None, retrieve_and_validate, q, request.top_k * 2, request.tenant_id, None, request.crime_type)
+                loop.run_in_executor(None, retrieve_and_validate, q, max(request.top_k * 4, 20), request.tenant_id, None, request.crime_type)
             )
 
         for rv in await asyncio.gather(*retrieval_tasks):
             all_results.extend(rv.get("results", []))
-            validation = rv.get("validation")
 
     except Exception as e:
         logger.error(f"Hybrid retrieval failed: {e}")
         raise HTTPException(status_code=503, detail=f"Retrieval service unavailable: {e}")
 
-    seen_ids = set()
-    seen_articles = set()
-    unique_results = []
+    # Deduplicate by legal identity when metadata is available.
+    # Fall back to the result ID so records with missing article metadata are
+    # not incorrectly collapsed into one empty-string bucket. If duplicates
+    # exist, keep the candidate with the strongest combined score.
+    unique_by_key: Dict[Any, Any] = {}
 
-    for r in all_results:
-        article_num = r.metadata.get("article_number", "") if r.metadata else ""
-        if article_num not in seen_articles:
-            seen_ids.add(r.id)
-            seen_articles.add(article_num)
-            unique_results.append(r)
+    for result in all_results:
+        metadata = result.metadata or {}
+        article_number = str(metadata.get("article_number") or "").strip()
+        law = str(metadata.get("law") or "").strip()
+
+        if article_number:
+            dedup_key = ("article", law, article_number)
+        else:
+            dedup_key = ("result", str(result.id))
+
+        existing = unique_by_key.get(dedup_key)
+        existing_score = float(getattr(existing, "combined_score", 0.0)) if existing else float("-inf")
+        result_score = float(getattr(result, "combined_score", 0.0))
+
+        if existing is None or result_score > existing_score:
+            unique_by_key[dedup_key] = result
+
+    unique_results = list(unique_by_key.values())
+
+    reranker_applied = False
 
     try:
-       from .reranker import rerank
-       loop = asyncio.get_event_loop()
-       unique_results = await loop.run_in_executor(None, rerank, request.query, unique_results, request.top_k)
+        from .reranker import rerank
+
+        loop = asyncio.get_running_loop()
+        unique_results = await loop.run_in_executor(
+            None,
+            rerank,
+            request.query,
+            unique_results,
+            request.top_k,
+        )
+        reranker_applied = True
     except Exception as e:
-       logger.warning(f"Reranking failed: {e}")
-       unique_results = unique_results[:request.top_k]
+        logger.warning("Reranking failed: %s", e)
+        unique_results = unique_results[:request.top_k]
 
     articles = []
 
@@ -282,7 +332,7 @@ async def retrieve(request: RetrieveRequest):
     try:
         from .observability import record_retrieval, RetrievalMetric
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, record_retrieval, RetrievalMetric(
             timestamp=time.time(),
             query=request.query,
@@ -293,7 +343,9 @@ async def retrieve(request: RetrieveRequest):
             avg_score=sum(a.relevance_score for a in articles) / len(articles) if articles else 0.0,
             cache_hit=False,
             latency_ms=latency,
-            reranker_applied=config.reranker.enabled,
+            reranker_applied=reranker_applied,
+            request_id=request.session_id,
+            score_type="hybrid",
             query_transformed=strategy_used != "none",
         ))
 
@@ -307,7 +359,7 @@ async def retrieve(request: RetrieveRequest):
     if articles:
         try:
             from .cache import store
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, store, enhanced_query, response_dict, request.tenant_id)
         except Exception as e:
             logger.warning(f"Cache store failed: {e}")
@@ -365,7 +417,7 @@ async def index_articles(request: IndexRequest, background_tasks: BackgroundTask
     try:
         from .ingestion import index_articles as ingest_articles
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
             None, ingest_articles, request.articles, request.tenant_id
         )
@@ -406,6 +458,8 @@ def check_faithfulness(request: FaithfulnessRequest):
         request.query,
         request.answer,
         request.citations,
+        tenant_id=request.tenant_id,
+        request_id=request.request_id,
     )
 
     return FaithfulnessResponse(
@@ -413,6 +467,9 @@ def check_faithfulness(request: FaithfulnessRequest):
         has_citations=result.has_citations,
         num_citations=result.num_citations,
         hallucination_risk=result.hallucination_risk,
+        evaluated=result.evaluated,
+        citation_coverage=result.citation_coverage,
+        uncertainty_detected=result.uncertainty_detected,
     )
 
 
@@ -498,6 +555,3 @@ async def validate_citations_endpoint(request: ValidateCitationsRequest):
     )
 
     return CitationValidationResult(**result)
-
-
-

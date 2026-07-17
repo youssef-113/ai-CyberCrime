@@ -4,7 +4,10 @@ This version indexes chunks into ChromaDB instead of Qdrant.
 """
  
 import hashlib
+import json
 import logging
+import threading
+import time
 from collections import OrderedDict
 from typing import List, Dict, Any, Optional
 from urllib.parse import urlparse, urlunparse
@@ -16,13 +19,14 @@ logger = logging.getLogger("rag.ingestion")
  
 # Bounded in-memory cache (process-local, L1 in front of Redis).
 # Prevents unbounded growth in long-running Celery workers.
-_EMBEDDING_CACHE_MAX_ITEMS = 50_000
+_EMBEDDING_CACHE_MAX_ITEMS = config.ingestion.embedding_l1_cache_max_items
 _embedding_cache: "OrderedDict[str, List[float]]" = OrderedDict()
+_embedding_cache_lock = threading.RLock()
  
 _celery_app = None
 _chroma_client = None
 _redis_client = None
-_redis_unavailable = False  # sticky flag so we don't retry-connect on every call
+_redis_next_retry_at = 0.0
  
  
 def _content_hash(model_id: str, text: str) -> str:
@@ -31,10 +35,12 @@ def _content_hash(model_id: str, text: str) -> str:
  
  
 def _cache_get(key: str) -> Optional[List[float]]:
-    vec = _embedding_cache.get(key)
-    if vec is not None:
-        _embedding_cache.move_to_end(key)
-    return vec
+    with _embedding_cache_lock:
+        vec = _embedding_cache.get(key)
+        if vec is not None:
+            _embedding_cache.move_to_end(key)
+        return vec
+
  
  
 def _cache_put(key: str, vec: List[float]) -> None:
@@ -81,36 +87,35 @@ def _embedding_cache_redis_url() -> str:
  
  
 def _get_redis():
-    """Lazy, cached Redis client for the embedding cache.
- 
-    Previously this opened a brand-new connection (with a 2s connect timeout)
-    on every single embedding lookup. Now it's created once and reused, and a
-    failed connection is remembered so we don't keep retrying on every call.
-    """
-    global _redis_client, _redis_unavailable
- 
-    if _redis_unavailable:
+    """Return a reusable Redis client with retry cooldown after failures."""
+    global _redis_client, _redis_next_retry_at
+
+    if _redis_client is not None:
+        return _redis_client
+    if time.monotonic() < _redis_next_retry_at:
         return None
- 
-    if _redis_client is None:
-        try:
-            import redis
- 
-            _redis_client = redis.from_url(
-                _embedding_cache_redis_url(),
-                decode_responses=False,
-                socket_connect_timeout=2,
-            )
-            _redis_client.ping()
-        except Exception as e:
-            logger.warning(f"Redis unavailable for embedding cache: {e}")
-            _redis_client = None
-            _redis_unavailable = True
-            return None
- 
-    return _redis_client
- 
- 
+
+    try:
+        import redis
+
+        client = redis.from_url(
+            _embedding_cache_redis_url(),
+            decode_responses=False,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        client.ping()
+        _redis_client = client
+        return _redis_client
+    except Exception as exc:
+        logger.warning("Redis unavailable for embedding cache: %s", exc)
+        _redis_client = None
+        _redis_next_retry_at = (
+            time.monotonic() + config.ingestion.redis_retry_interval_seconds
+        )
+        return None
+
+
 def _redis_mget_embeddings(redis, cache_keys: List[str]) -> Dict[str, List[float]]:
     """Fetch multiple embeddings from Redis in one round trip."""
     import numpy as np
@@ -223,7 +228,7 @@ def batch_embed(texts: List[str], model_id: str = None) -> List[List[float]]:
         vecs = model.encode(
             uncached_texts,
             normalize_embeddings=True,
-            batch_size=32,
+            batch_size=config.ingestion.embedding_batch_size,
         )
  
         newly_computed = {}
@@ -237,7 +242,9 @@ def batch_embed(texts: List[str], model_id: str = None) -> List[List[float]]:
         if redis is not None:
             _redis_mset_embeddings(redis, newly_computed)
  
-    return results  # type: ignore[return-value]
+    if any(result is None for result in results):
+        raise RuntimeError("Embedding batch completed with missing vectors")
+    return [result for result in results if result is not None]
  
  
 def index_chunks(
@@ -263,7 +270,7 @@ def index_chunks(
         client = _get_chroma()
         collection = client.get_or_create_collection(name=collection_name)
     except Exception as e:
-        logger.error(f"Failed to connect/create ChromaDB collection: {e}")
+        logger.exception("Failed to connect/create ChromaDB collection")
         return {"indexed": 0, "error": str(e)}
  
     texts = [chunk["text"] for chunk in chunks]
@@ -289,7 +296,7 @@ def index_chunks(
             elif isinstance(value, (str, int, float, bool)):
                 clean_metadata[key] = value
             else:
-                clean_metadata[key] = str(value)
+                clean_metadata[key] = json.dumps(value, ensure_ascii=False, sort_keys=True)
  
         ids.append(chunk_id)
         metadatas.append(clean_metadata)
@@ -314,7 +321,7 @@ def index_chunks(
             total_indexed += len(batch_ids)
             logger.info(f"Indexed ChromaDB batch {i // batch_size + 1}: {len(batch_ids)} chunks")
         except Exception as e:
-            logger.error(f"Failed to index ChromaDB batch: {e}")
+            logger.exception("Failed to index ChromaDB batch")
             return {"indexed": total_indexed, "error": str(e)}
  
     return {

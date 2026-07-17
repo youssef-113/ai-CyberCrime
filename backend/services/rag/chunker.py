@@ -1,225 +1,295 @@
-"""Recursive Chunking with Parent-Child Strategy
+"""Recursive parent-child chunking with stable document-scoped IDs."""
 
-Production chunking: recursive splitting with ~512 tokens / ~200 token overlap.
-Parent-child: embed small chunks, return larger parent sections for context.
-"""
-import re
 import hashlib
-from typing import List, Dict, Optional
+import re
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 from .config import config
 
 
 def _count_tokens_approx(text: str) -> int:
-    """Approximate token count (1 token ≈ 4 chars for English, ~2 chars for Arabic)."""
-    # Blend heuristic: average between English and Arabic ratio
-    arabic_chars = sum(1 for c in text if '\u0600' <= c <= '\u06FF')
+    arabic_chars = sum(1 for char in text if "\u0600" <= char <= "\u06ff")
     non_arabic_chars = len(text) - arabic_chars
     return max(1, int(arabic_chars / 2 + non_arabic_chars / 4))
 
 
 @dataclass
 class Chunk:
-    """A single chunk with metadata."""
     id: str
     text: str
-    metadata: Dict
+    metadata: Dict[str, Any]
     parent_id: Optional[str] = None
     token_count: int = 0
 
-    def __post_init__(self):
-        if self.token_count == 0:
+    def __post_init__(self) -> None:
+        if self.token_count <= 0:
             self.token_count = _count_tokens_approx(self.text)
 
 
-def _generate_chunk_id(text: str, index: int, parent_id: Optional[str] = None) -> str:
-    """Content-addressable chunk ID using hash of text + index."""
-    content = f"{parent_id or ''}:{index}:{text[:200]}"
-    return hashlib.md5(content.encode()).hexdigest()[:16]
+def _document_identity(metadata: Dict[str, Any]) -> str:
+    article_id = str(metadata.get("article_id") or "").strip()
+    if article_id:
+        return article_id
+
+    law = str(metadata.get("law") or "unknown-law").strip()
+    article_number = str(metadata.get("article_number") or "unknown-article").strip()
+    source_file = str(metadata.get("source_file") or "unknown-source").strip()
+    language = str(metadata.get("language") or "unknown-language").strip()
+    return f"{law}|{article_number}|{source_file}|{language}"
 
 
-def _split_by_separators(text: str, separators: List[str]) -> List[str]:
-    """Split text by separators in priority order."""
-    if not text.strip():
-        return []
+def _generate_chunk_id(
+    text: str,
+    index: int,
+    metadata: Dict[str, Any],
+    parent_id: Optional[str] = None,
+) -> str:
+    content = "\x1f".join(
+        [
+            _document_identity(metadata),
+            parent_id or "",
+            str(index),
+            text,
+        ]
+    )
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()[:32]
 
-    for sep in separators:
-        if sep in text:
-            parts = text.split(sep)
-            parts = [p.strip() for p in parts if p.strip()]
-            if len(parts) > 1:
-                return parts
 
-    return [text.strip()]
+def _validate_chunk_parameters(chunk_size: int, chunk_overlap: int) -> None:
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than zero")
+    if chunk_overlap < 0:
+        raise ValueError("chunk_overlap cannot be negative")
+    if chunk_overlap >= chunk_size:
+        raise ValueError("chunk_overlap must be smaller than chunk_size")
 
 
 def recursive_chunk(
     text: str,
-    chunk_size: int = None,
-    chunk_overlap: int = None,
-    separators: List[str] = None,
+    chunk_size: Optional[int] = None,
+    chunk_overlap: Optional[int] = None,
+    separators: Optional[List[str]] = None,
 ) -> List[str]:
-    """Recursive chunking that respects document structure.
+    chunk_size = config.chunking.chunk_size if chunk_size is None else chunk_size
+    chunk_overlap = (
+        config.chunking.chunk_overlap if chunk_overlap is None else chunk_overlap
+    )
+    separators = config.chunking.separators if separators is None else separators
 
-    Splits by highest-priority separator first, then recursively
-    splits any chunk that exceeds chunk_size.
-    """
-    chunk_size = chunk_size or config.chunking.chunk_size
-    chunk_overlap = chunk_overlap or config.chunking.chunk_overlap
-    separators = separators or config.chunking.separators
+    _validate_chunk_parameters(chunk_size, chunk_overlap)
 
-    if _count_tokens_approx(text) <= chunk_size:
-        return [text.strip()] if text.strip() else []
+    cleaned = text.strip()
+    if not cleaned:
+        return []
+    if _count_tokens_approx(cleaned) <= chunk_size:
+        return [cleaned]
 
-    # Try splitting by each separator
-    for sep in separators:
-        if sep in text:
-            parts = text.split(sep)
-            parts = [p.strip() for p in parts if p.strip()]
+    for separator in separators:
+        if not separator or separator not in cleaned:
+            continue
 
-            if not parts:
+        parts = [part.strip() for part in cleaned.split(separator) if part.strip()]
+        if len(parts) <= 1:
+            continue
+
+        result: List[str] = []
+        current = ""
+
+        for part in parts:
+            if _count_tokens_approx(part) > chunk_size:
+                if current:
+                    result.append(current.strip())
+                    current = ""
+                result.extend(
+                    recursive_chunk(part, chunk_size, chunk_overlap, separators)
+                )
                 continue
 
-            # Merge small parts and split large ones
-            result = []
-            current_chunk = ""
+            candidate = f"{current}{separator}{part}" if current else part
+            if _count_tokens_approx(candidate) <= chunk_size:
+                current = candidate
+                continue
 
-            for part in parts:
-                part_tokens = _count_tokens_approx(part)
+            if current:
+                result.append(current.strip())
+                overlap_text = _get_overlap_text(current, chunk_overlap)
+                current = (
+                    f"{overlap_text}{separator}{part}" if overlap_text else part
+                )
+            else:
+                current = part
 
-                if part_tokens > chunk_size:
-                    # Part is too large, recurse
-                    if current_chunk:
-                        result.append(current_chunk)
-                        current_chunk = ""
-                    sub_chunks = recursive_chunk(part, chunk_size, chunk_overlap, separators)
-                    result.extend(sub_chunks)
-                elif _count_tokens_approx(current_chunk + sep + part) > chunk_size:
-                    # Adding this part would exceed limit
-                    if current_chunk:
-                        result.append(current_chunk)
-                    # Start new chunk with overlap
-                    overlap_text = _get_overlap_text(current_chunk, chunk_overlap)
-                    current_chunk = overlap_text + sep + part if overlap_text else part
-                else:
-                    current_chunk = current_chunk + sep + part if current_chunk else part
+        if current:
+            result.append(current.strip())
 
-            if current_chunk:
-                result.append(current_chunk)
+        if result:
+            return result
 
-            if result:
-                return result
-
-    # No separator worked, hard split by character count
-    return _hard_split(text, chunk_size, chunk_overlap)
+    return _hard_split(cleaned, chunk_size, chunk_overlap)
 
 
 def _get_overlap_text(text: str, overlap_tokens: int) -> str:
-    """Get the tail of text that represents overlap_tokens worth of content."""
-    if not text:
+    if not text or overlap_tokens <= 0:
         return ""
-    # Approximate: overlap_tokens * 3 chars (average)
-    char_count = overlap_tokens * 3
-    if len(text) <= char_count:
-        return text
-    return text[-char_count:]
+
+    approximate_chars = overlap_tokens * 3
+    if len(text) <= approximate_chars:
+        return text.strip()
+
+    start = max(0, len(text) - approximate_chars)
+    tail = text[start:]
+    boundary = re.search(r"\s", tail)
+    if boundary:
+        tail = tail[boundary.end() :]
+    return tail.strip()
 
 
 def _hard_split(text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
-    """Hard split by character count when no separators work."""
-    char_per_token = 3  # approximate
-    char_limit = chunk_size * char_per_token
-    overlap_chars = chunk_overlap * char_per_token
+    _validate_chunk_parameters(chunk_size, chunk_overlap)
 
-    chunks = []
+    char_limit = max(1, chunk_size * 3)
+    overlap_chars = chunk_overlap * 3
+    step = char_limit - overlap_chars
+    if step <= 0:
+        raise ValueError("Invalid hard-split step; overlap must be smaller than size")
+
+    chunks: List[str] = []
     start = 0
+
     while start < len(text):
-        end = start + char_limit
+        raw_end = min(len(text), start + char_limit)
+        end = raw_end
+
+        if raw_end < len(text):
+            boundary = max(
+                text.rfind("\n", start + 1, raw_end),
+                text.rfind(". ", start + 1, raw_end),
+                text.rfind(" ", start + 1, raw_end),
+            )
+            if boundary > start:
+                end = boundary + 1
+
         chunk = text[start:end].strip()
         if chunk:
             chunks.append(chunk)
-        start = end - overlap_chars
+
+        if end >= len(text):
+            break
+
+        next_start = max(start + 1, end - overlap_chars)
+        if next_start <= start:
+            next_start = start + step
+        start = next_start
 
     return chunks
 
 
 def create_parent_child_chunks(
     text: str,
-    metadata: Dict,
-    child_size: int = None,
-    parent_size: int = None,
-    overlap: int = None,
+    metadata: Dict[str, Any],
+    child_size: Optional[int] = None,
+    parent_size: Optional[int] = None,
+    overlap: Optional[int] = None,
 ) -> List[Chunk]:
-    """Create parent-child chunks.
+    child_size = config.chunking.chunk_size if child_size is None else child_size
+    parent_size = (
+        config.chunking.parent_chunk_size if parent_size is None else parent_size
+    )
+    overlap = config.chunking.chunk_overlap if overlap is None else overlap
 
-    Parent chunks: larger sections for context retrieval.
-    Child chunks: smaller sections for precise embedding/matching.
-    Each child points to its parent so the full context can be returned.
-    """
-    child_size = child_size or config.chunking.chunk_size
-    parent_size = parent_size or config.chunking.parent_chunk_size
-    overlap = overlap or config.chunking.chunk_overlap
+    _validate_chunk_parameters(child_size, overlap)
+    _validate_chunk_parameters(parent_size, overlap)
+    if parent_size <= child_size:
+        raise ValueError("parent_chunk_size must be greater than child chunk_size")
 
-    # First, create parent chunks
+    chunks: List[Chunk] = []
     parent_texts = recursive_chunk(text, parent_size, overlap)
-    chunks = []
 
-    for p_idx, parent_text in enumerate(parent_texts):
-        parent_id = _generate_chunk_id(parent_text, p_idx)
-        parent_chunk = Chunk(
-            id=parent_id,
-            text=parent_text,
-            metadata={
-                **metadata,
-                "chunk_type": "parent",
-                "chunk_index": p_idx,
-            },
-            parent_id=None,
+    for parent_index, parent_text in enumerate(parent_texts):
+        parent_metadata = {
+            **metadata,
+            "chunk_type": "parent",
+            "chunk_index": parent_index,
+        }
+        parent_id = _generate_chunk_id(
+            parent_text,
+            parent_index,
+            parent_metadata,
         )
-        chunks.append(parent_chunk)
+        chunks.append(
+            Chunk(
+                id=parent_id,
+                text=parent_text,
+                metadata=parent_metadata,
+            )
+        )
 
-        # Create child chunks within this parent
         child_texts = recursive_chunk(parent_text, child_size, overlap)
-        for c_idx, child_text in enumerate(child_texts):
-            child_id = _generate_chunk_id(child_text, c_idx, parent_id)
-            child_chunk = Chunk(
-                id=child_id,
-                text=child_text,
-                metadata={
-                    **metadata,
-                    "chunk_type": "child",
-                    "parent_id": parent_id,
-                    "chunk_index": c_idx,
-                },
+        for child_index, child_text in enumerate(child_texts):
+            if child_text.strip() == parent_text.strip():
+                continue
+
+            child_metadata = {
+                **metadata,
+                "chunk_type": "child",
+                "parent_id": parent_id,
+                "chunk_index": child_index,
+            }
+            child_id = _generate_chunk_id(
+                child_text,
+                child_index,
+                child_metadata,
                 parent_id=parent_id,
             )
-            chunks.append(child_chunk)
+            chunks.append(
+                Chunk(
+                    id=child_id,
+                    text=child_text,
+                    metadata=child_metadata,
+                    parent_id=parent_id,
+                )
+            )
 
     return chunks
 
 
-def chunk_article(article: Dict) -> List[Chunk]:
-    """Chunk a single law article with rich metadata.
+def _language_documents(article: Dict[str, Any]) -> List[tuple[str, str]]:
+    documents: List[tuple[str, str]] = []
+    text_ar = str(article.get("text_ar") or "").strip()
+    text_en = str(article.get("text_en") or "").strip()
+    fallback = str(article.get("text") or "").strip()
 
-    Each chunk includes:
-    - Summary (from article title)
-    - Keywords
-    - Source document info
-    - Parent-child relationships
-    """
-    text = article.get("text_ar", "") or article.get("text_en", "") or article.get("text", "")
-    if not text:
-        return []
+    if text_ar:
+        documents.append(("ar", text_ar))
+    if text_en:
+        documents.append(("en", text_en))
+    if not documents and fallback:
+        documents.append((str(article.get("language") or "und"), fallback))
 
-    base_metadata = {
-        "article_number": article.get("article_number", "Unknown"),
-        "law": article.get("law", "Unknown"),
-        "crime_type": article.get("crime_type", "general"),
-        "source_file": article.get("source_file", ""),
-        "summary": article.get("title_ar", "") or article.get("title_en", "") or "",
-        "keywords": article.get("keywords", []),
-        "penalty_ar": article.get("penalty_ar", ""),
-    }
+    return documents
 
-    return create_parent_child_chunks(text, base_metadata)
+
+def chunk_article(article: Dict[str, Any]) -> List[Chunk]:
+    all_chunks: List[Chunk] = []
+
+    for language, text in _language_documents(article):
+        metadata: Dict[str, Any] = {
+            "article_id": article.get("article_id", ""),
+            "article_number": str(article.get("article_number") or "Unknown"),
+            "law": str(article.get("law") or "Unknown"),
+            "crime_type": str(article.get("crime_type") or "general"),
+            "source_file": str(article.get("source_file") or ""),
+            "summary": (
+                article.get("summary")
+                or article.get("title_ar")
+                or article.get("title_en")
+                or ""
+            ),
+            "keywords": article.get("keywords") or [],
+            "penalty_ar": article.get("penalty_ar") or "",
+            "language": language,
+        }
+        all_chunks.extend(create_parent_child_chunks(text, metadata))
+
+    return all_chunks
