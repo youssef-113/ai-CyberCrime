@@ -22,6 +22,10 @@ def _get_chroma():
         import os
 
         if config.chroma.client_type == "cloud":
+            if not config.chroma.api_key or not config.chroma.cloud_tenant or not config.chroma.cloud_database:
+                raise ValueError(
+                    "ChromaDB cloud mode requires CHROMA_API_KEY, CHROMA_CLOUD_TENANT, and CHROMA_CLOUD_DATABASE"
+                )
             _chroma_client = chromadb.CloudClient(
                 api_key=config.chroma.api_key,
                 tenant=config.chroma.cloud_tenant,
