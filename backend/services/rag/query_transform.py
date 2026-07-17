@@ -530,4 +530,4 @@ async def transform_query(
         result["queries"] = [cleaned_query]
         result["error"] = str(exc)
 
-    return result
+    return result#end

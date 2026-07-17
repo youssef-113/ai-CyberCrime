@@ -335,3 +335,4 @@ def get_cache_stats() -> Dict[str, Any]:
             stats["redis_entries"] = "unknown"
 
     return stats
+#end

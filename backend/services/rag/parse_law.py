@@ -5,6 +5,7 @@ The parser expects text that has already been extracted from the original
 document. PDF extraction, OCR, table reconstruction, header/footer removal,
 and layout cleanup should happen before calling this module.
 """
+#start
 
 import json
 import logging

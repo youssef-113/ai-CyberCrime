@@ -555,3 +555,4 @@ async def validate_citations_endpoint(request: ValidateCitationsRequest):
     )
 
     return CitationValidationResult(**result)
+#end

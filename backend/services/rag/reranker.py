@@ -192,4 +192,4 @@ def rerank(
         logger.exception(
             "Cross-encoder reranking failed"
         )
-        return results[:top_n]
+        return results[:top_n] #end

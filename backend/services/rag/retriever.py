@@ -435,7 +435,7 @@ def retrieve_and_validate(
     # Convert to article-like dicts for validation
     articles = []
     for r in results:
-        meta = r.metadata or {}
+        meta = r.metadata or {} #s
         articles.append({
             "article_number": meta.get("article_number") or "",
             "law": meta.get("law", ""),

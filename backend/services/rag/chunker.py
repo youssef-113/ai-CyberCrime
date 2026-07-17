@@ -293,3 +293,4 @@ def chunk_article(article: Dict[str, Any]) -> List[Chunk]:
         all_chunks.extend(create_parent_child_chunks(text, metadata))
 
     return all_chunks
+#end

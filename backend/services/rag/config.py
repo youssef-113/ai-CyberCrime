@@ -196,4 +196,4 @@ class RAGConfig:
     multi_tenant: MultiTenantConfig = field(default_factory=MultiTenantConfig)
 
 
-config = RAGConfig()
+config = RAGConfig() #end

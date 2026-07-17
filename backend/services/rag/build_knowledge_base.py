@@ -134,3 +134,4 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     args = _parse_args()
     build_knowledge_base(args.articles_path, tenant_id=args.tenant_id)
+#end

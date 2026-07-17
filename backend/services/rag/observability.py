@@ -885,5 +885,5 @@ def get_metrics_summary(
                 ),
             })
 
-    return summary
+    return summary #end
 
