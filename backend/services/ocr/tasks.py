@@ -1,17 +1,3 @@
-"""
-Celery tasks for async OCR processing (v2)
-
-Queue:  ocr
-Broker: redis://redis:6379/1  (CELERY_BROKER_URL)
-Backend:redis://redis:6379/2  (CELERY_RESULT_BACKEND)
-
-Tasks
-─────
-process_image_async  — single image / text file
-process_pdf_async    — multi-page PDF (via pdf2image)
-process_batch_async  — list of file paths
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -27,28 +13,11 @@ from services.common.celery_app import celery_app
 logger = logging.getLogger("ocr.tasks")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  Base task class
-# ══════════════════════════════════════════════════════════════════════════════
-
 class OCRTask(Task):
-    """
-    Base Celery task for OCR operations.
-
-    - Logs failure details to the structured logger
-    - Writes a performance_metrics row to the DB on completion
-    - Cleans up temp files on failure
-    """
-
-    abstract = True   # not registered as a task itself
+    abstract = True
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
-        logger.error(
-            "OCR task FAILED | task_id=%s error=%s",
-            task_id, str(exc),
-            exc_info=True,
-        )
-        # Best-effort: remove temp file
+        logger.error("OCR task FAILED | task_id=%s error=%s", task_id, str(exc))
         file_path = kwargs.get("file_path") or (args[0] if args else None)
         if file_path and os.path.exists(str(file_path)):
             try:
@@ -62,55 +31,32 @@ class OCRTask(Task):
         super().on_success(retval, task_id, args, kwargs)
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
-        logger.warning(
-            "OCR task RETRY | task_id=%s attempt=%d error=%s",
-            task_id, self.request.retries, str(exc),
-        )
+        logger.warning("OCR task RETRY | task_id=%s attempt=%d", task_id, self.request.retries)
         super().on_retry(exc, task_id, args, kwargs, einfo)
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  Helpers
-# ══════════════════════════════════════════════════════════════════════════════
 
 def _read_file(file_path: str) -> bytes:
     with open(file_path, "rb") as fh:
         return fh.read()
 
 
-def _cache_key(content: bytes) -> str:
-    return f"ocr:result:{hashlib.sha256(content).hexdigest()}"
+def _build_response(ocr_text: str, clean_text: str, qwen_data: Optional[Dict] = None) -> Dict[str, Any]:
+    from arabic_utils import detect_language
 
+    entities = qwen_data.get("entities", {}) if qwen_data else {}
+    timeline = qwen_data.get("timeline", []) if qwen_data else []
 
-def _get_cached(content: bytes) -> Optional[Dict]:
-    try:
-        from services.common.cache import cache
-        return cache.get(_cache_key(content))
-    except Exception:
-        return None
+    return {
+        "document_language": qwen_data.get("document_language", "unknown") if qwen_data else detect_language(clean_text),
+        "crime_type": qwen_data.get("crime_type", "") if qwen_data else "",
+        "confidence": min(max(float(qwen_data.get("confidence", 0.0)), 0.0), 1.0) if qwen_data else 0.0,
+        "summary": qwen_data.get("summary", "") if qwen_data else "",
+        "entities": entities,
+        "timeline": timeline,
+        "raw_text": ocr_text,
+        "clean_text": clean_text,
+    }
 
-
-def _store_cached(content: bytes, result: Dict, ttl: int = 3600) -> None:
-    try:
-        from services.common.cache import cache
-        cache.set(_cache_key(content), result, ttl=ttl)
-    except Exception:
-        pass
-
-
-def _build_config():
-    from .ocr_engine import OCRConfig
-    return OCRConfig(
-        paddle_confidence_threshold=float(os.getenv("PADDLE_CONFIDENCE_THRESHOLD",  "0.80")),
-        use_preprocessing=True,
-        target_width=800,
-        use_groq_layer=os.getenv("GROQ_API_KEY", "") != "",
-    )
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  Task: process_image_async
-# ══════════════════════════════════════════════════════════════════════════════
 
 @celery_app.task(
     bind=True,
@@ -124,77 +70,41 @@ def process_image_async(
     self,
     file_path: str,
     filename: str,
-    block_id: str = "E001",
 ) -> Dict[str, Any]:
-    """
-    Process a single image or text file asynchronously.
-
-    Args:
-        file_path: Absolute path to the temp file on disk
-        filename:  Original upload filename
-        block_id:  Evidence block identifier prefix
-
-    Returns:
-        Serialisable dict matching OCRResponse shape
-    """
-    from .arabic_utils import normalize_arabic_text
-    from .entities import extract_entities, merge_entities
-    from .ocr_engine import get_ocr_engine
+    from arabic_utils import normalize_arabic_text
+    from ocr_engine import get_ocr_engine
+    from reasoning import reason_text
 
     t_start = time.perf_counter()
     content = _read_file(file_path)
 
-    # ── Redis cache check ──────────────────────────────────────────────────
-    cached = _get_cached(content)
-    if cached:
-        logger.info("Cache HIT for %s", filename)
-        return cached
-
-    # ── Text file fast-path ────────────────────────────────────────────────
     if filename.lower().endswith(".txt"):
-        text       = content.decode("utf-8", errors="ignore")
-        normalized = normalize_arabic_text(text)
-        result = {
-            "status":            "success",
-            "full_text":         text,
-            "normalized_text":   normalized,
-            "avg_confidence":    1.0,
-            "engine_used":       "text_file",
-            "fallback_triggered": False,
-            "entities":          {},
-            "evidence_blocks":   [],
-            "processing_time_ms": 0,
-        }
-        _store_cached(content, result)
+        text = content.decode("utf-8", errors="ignore")
+        clean = normalize_arabic_text(text)
+        qwen_data = reason_text(clean)
+        result = _build_response(text, clean, qwen_data)
+        result["status"] = "success"
         return result
 
-    # ── OCR processing ─────────────────────────────────────────────────────
     try:
-        engine     = get_ocr_engine(_build_config())
-        ocr_result = engine.process_image(content, filename, block_id)
+        engine = get_ocr_engine()
+        ocr_result = engine.extract_text(content, filename)
+        raw_text = ocr_result.text
+        clean_text = normalize_arabic_text(raw_text)
 
-        # Entity extraction
-        all_ents = [
-            extract_entities(blk.normalized_text, blk.block_id)
-            for blk in ocr_result.blocks
-        ]
-        merged   = merge_entities(all_ents)
+        qwen_data = None
+        if clean_text.strip():
+            qwen_data = reason_text(clean_text)
 
-        processing_ms = (time.perf_counter() - t_start) * 1000
+        result = _build_response(raw_text, clean_text, qwen_data)
+        result["status"] = "success"
 
-        result = {
-            "status":            "success",
-            "full_text":         ocr_result.text,
-            "normalized_text":   normalize_arabic_text(ocr_result.text),
-            "avg_confidence":    round(ocr_result.confidence, 4),
-            "engine_used":       ocr_result.engine,
-            "fallback_triggered": ocr_result.fallback_triggered,
-            "entities":          merged.model_dump() if hasattr(merged, "model_dump") else {},
-            "evidence_blocks":   [b.model_dump() for b in ocr_result.blocks],
-            "groq_entities":     getattr(ocr_result, "groq_entities", None),
-            "processing_time_ms": round(processing_ms, 2),
-        }
-        _store_cached(content, result)
+        from chroma_store import store_ocr_result
+        from models import OCRResponse
+
+        resp = OCRResponse(**result)
+        store_ocr_result(resp, document_id=filename)
+
         return result
 
     except Exception as exc:
@@ -202,11 +112,7 @@ def process_image_async(
         try:
             raise self.retry(exc=exc, countdown=10 * (self.request.retries + 1))
         except self.MaxRetriesExceededError:
-            return {
-                "status":  "error",
-                "error":   str(exc),
-                "file":    filename,
-            }
+            return {"status": "error", "error": str(exc), "file": filename}
     finally:
         if os.path.exists(file_path):
             try:
@@ -214,10 +120,6 @@ def process_image_async(
             except OSError:
                 pass
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  Task: process_pdf_async
-# ══════════════════════════════════════════════════════════════════════════════
 
 @celery_app.task(
     bind=True,
@@ -229,92 +131,61 @@ def process_image_async(
 )
 def process_pdf_async(
     self,
-    file_path:  str,
-    filename:   str,
-    max_pages:  int = 20,
+    file_path: str,
+    filename: str,
+    max_pages: int = 20,
 ) -> Dict[str, Any]:
-    """
-    Convert PDF → images (pdf2image), run OCR on each page, merge results.
+    from arabic_utils import normalize_arabic_text
+    from ocr_engine import get_ocr_engine
+    from reasoning import reason_text
 
-    Falls back to treating the PDF as a single blob if pdf2image is missing.
-    """
-    from .arabic_utils import normalize_arabic_text
-    from .entities import extract_entities, merge_entities
-    from .ocr_engine import get_ocr_engine
-
-    t_start  = time.perf_counter()
-    content  = _read_file(file_path)
-    engine   = get_ocr_engine(_build_config())
+    t_start = time.perf_counter()
+    content = _read_file(file_path)
+    engine = get_ocr_engine()
 
     try:
-        from pdf2image import convert_from_bytes  # type: ignore
+        from pdf2image import convert_from_bytes
         pages = convert_from_bytes(content, dpi=200)[:max_pages]
         logger.info("PDF: %d pages for %s", len(pages), filename)
 
         import io
-        all_blocks = []
-        all_ents   = []
-        texts      = []
+        all_texts: List[str] = []
 
         for i, page in enumerate(pages):
             buf = io.BytesIO()
             page.save(buf, format="PNG")
             page_bytes = buf.getvalue()
-            bid        = f"PDF{i+1:03d}"
-            ocr_result = engine.process_image(page_bytes, filename, bid)
-            all_blocks.extend(ocr_result.blocks)
-            texts.append(ocr_result.text)
-            for blk in ocr_result.blocks:
-                all_ents.append(extract_entities(blk.normalized_text, blk.block_id))
+            ocr_result = engine.extract_text(page_bytes, f"{filename}_p{i+1}")
+            all_texts.append(ocr_result.text)
 
-        merged     = merge_entities(all_ents)
-        full_text  = " ".join(texts)
-        avg_conf   = (
-            sum(b.confidence for b in all_blocks) / len(all_blocks)
-            if all_blocks else 0.0
-        )
+        raw_text = "\n".join(all_texts)
+        clean_text = normalize_arabic_text(raw_text)
+        qwen_data = reason_text(clean_text) if clean_text.strip() else None
+        result = _build_response(raw_text, clean_text, qwen_data)
+        result["status"] = "success"
+        result["pages_processed"] = len(pages)
+        return result
 
     except ImportError:
-        logger.warning("pdf2image not installed — treating PDF as single image blob")
-        ocr_result = engine.process_image(content, filename, "PDF001")
-        all_blocks = ocr_result.blocks
-        texts      = [ocr_result.text]
-        all_ents   = [
-            extract_entities(blk.normalized_text, blk.block_id)
-            for blk in ocr_result.blocks
-        ]
-        merged    = merge_entities(all_ents)
-        full_text = ocr_result.text
-        avg_conf  = ocr_result.confidence
+        logger.warning("pdf2image not installed — treating PDF as single image")
+        ocr_result = engine.extract_text(content, filename)
+        raw_text = ocr_result.text
+        clean_text = normalize_arabic_text(raw_text)
+        qwen_data = reason_text(clean_text) if clean_text.strip() else None
+        result = _build_response(raw_text, clean_text, qwen_data)
+        result["status"] = "success"
+        return result
 
-    processing_ms = (time.perf_counter() - t_start) * 1000
+    except Exception as exc:
+        logger.error("process_pdf_async failed: %s", exc)
+        return {"status": "error", "error": str(exc), "file": filename}
+    finally:
+        if os.path.exists(file_path):
+            try:
+                os.unlink(file_path)
+            except OSError:
+                pass
 
-    result = {
-        "status":             "success",
-        "full_text":          full_text,
-        "normalized_text":    normalize_arabic_text(full_text),
-        "avg_confidence":     round(avg_conf, 4),
-        "pages_processed":    len(texts),
-        "evidence_blocks":    [b.model_dump() for b in all_blocks],
-        "entities":           merged.model_dump() if hasattr(merged, "model_dump") else {},
-        "processing_time_ms": round(processing_ms, 2),
-    }
-
-    # Cache keyed on raw content
-    _store_cached(content, result)
-
-    if os.path.exists(file_path):
-        try:
-            os.unlink(file_path)
-        except OSError:
-            pass
-
-    return result
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  Task: process_batch_async
-# ══════════════════════════════════════════════════════════════════════════════
 
 @celery_app.task(
     bind=True,
@@ -327,37 +198,29 @@ def process_pdf_async(
 def process_batch_async(
     self,
     file_paths: List[str],
-    filenames:  List[str],
+    filenames: List[str],
 ) -> Dict[str, Any]:
-    """
-    Process a list of files as a batch.  Each file dispatched individually
-    then results merged.
-
-    Returns aggregate result dict.
-    """
-    from .arabic_utils import normalize_arabic_text, detect_language
-    from .entities import merge_entities
-    from .ocr_engine import get_ocr_engine
+    from arabic_utils import normalize_arabic_text
+    from ocr_engine import get_ocr_engine
+    from reasoning import reason_text
 
     if len(file_paths) != len(filenames):
         return {"status": "error", "error": "file_paths and filenames length mismatch"}
 
-    engine     = get_ocr_engine(_build_config())
-    all_blocks = []
-    all_ents   = []
-    texts      = []
-    errors     = []
+    engine = get_ocr_engine()
+    results: List[Dict] = []
+    errors: List[str] = []
 
     for path, name in zip(file_paths, filenames):
         try:
-            content    = _read_file(path)
-            ocr_result = engine.process_image(content, name, f"B{len(texts)+1:03d}")
-            all_blocks.extend(ocr_result.blocks)
-            texts.append(ocr_result.text)
-
-            from .entities import extract_entities
-            for blk in ocr_result.blocks:
-                all_ents.append(extract_entities(blk.normalized_text, blk.block_id))
+            content = _read_file(path)
+            ocr_result = engine.extract_text(content, name)
+            raw_text = ocr_result.text
+            clean_text = normalize_arabic_text(raw_text)
+            qwen_data = reason_text(clean_text) if clean_text.strip() else None
+            r = _build_response(raw_text, clean_text, qwen_data)
+            r["file"] = name
+            results.append(r)
         except Exception as exc:
             errors.append({"file": name, "error": str(exc)})
         finally:
@@ -367,21 +230,10 @@ def process_batch_async(
                 except OSError:
                     pass
 
-    merged    = merge_entities(all_ents)
-    full_text = " ".join(texts)
-    avg_conf  = (
-        sum(b.confidence for b in all_blocks) / len(all_blocks)
-        if all_blocks else 0.0
-    )
-
     return {
-        "status":            "success" if not errors else "partial",
-        "full_text":         full_text,
-        "normalized_text":   normalize_arabic_text(full_text),
-        "avg_confidence":    round(avg_conf, 4),
-        "language":          detect_language(full_text),
-        "evidence_blocks":   [b.model_dump() for b in all_blocks],
-        "entities":          merged.model_dump() if hasattr(merged, "model_dump") else {},
-        "files_processed":   len(texts),
-        "errors":            errors,
+        "status": "success" if not errors else "partial",
+        "results": results,
+        "errors": errors,
+        "total_processed": len(results),
+        "total_errors": len(errors),
     }

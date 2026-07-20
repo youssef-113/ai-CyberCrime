@@ -1,36 +1,41 @@
-# ── Web framework ──────────────────────────────────────────────────────────
+# ── Web framework ──
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 pydantic==2.5.0
 httpx==0.25.0
-groq==0.12.0
 
-# ── OCR engines ─────────────────────────────────────────────────────────────
-# PaddleOCR (primary + Groq AI understanding layer for low-confidence results)
-paddleocr==2.7.0
-paddlepaddle==2.6.0
+# ── OCR Engine: Surya OCR ──
+surya-ocr>=0.7,<0.8
+torch>=2.0.0
+torchvision>=0.15.0
 
-# ── Image processing ─────────────────────────────────────────────────────────
-Pillow==10.1.0
-opencv-python-headless==4.8.1.78
-numpy==1.26.2
+# ── AI Reasoning: Qwen2.5-1B-Instruct ──
+transformers>=4.44.0,<5.0.0
+einops>=0.8.0
 
-# PDF page extraction (for process_pdf_async)
+# ── Image processing ──
+Pillow>=10.1.0
+opencv-python-headless>=4.9.0
+numpy
+
+# ── PDF page extraction ──
 pdf2image==1.17.0
-# Note: also requires poppler-utils system package in Dockerfile
 
-# ── Arabic text processing ───────────────────────────────────────────────────
+# ── Arabic text processing ──
 arabic-reshaper==3.0.0
 python-bidi==0.4.2
 
-# ── Async job processing ─────────────────────────────────────────────────────
+# ── Vector Database ──
+chromadb>=0.4.22
+sentence-transformers>=2.2.2
+
+# ── Async job processing ──
 celery==5.3.4
 redis==5.0.1
-kombu==5.3.2
 
-# ── Rate limiting + security ─────────────────────────────────────────────────
+# ── Rate limiting + security ──
 slowapi==0.1.9
 
-# ── Observability ────────────────────────────────────────────────────────────
+# ── Observability ──
 python-json-logger==2.0.7
