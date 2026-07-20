@@ -1,0 +1,31 @@
+{
+  "case_id": "TC_PHISHING_003",
+  "crime_type": "phishing",
+  "difficulty": "hard",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "رسالة إيميل رسمي: عزيزي العميل، تم اختراق حسابك. أعد تعيين كلمة المرور هنا: http://fake-bank.xyz/login",
+      "expected_entities": {
+        "urls": ["http://fake-bank.xyz/login"],
+        "emails": ["fake"]
+      }
+    },
+    {
+      "block_id": "E002",
+      "text": "المرسل: support@bank-misr-secure.com (مزيف)",
+      "expected_entities": {
+        "emails": ["support@bank-misr-secure.com"]
+      }
+    }
+  ],
+  "expected_output": {
+    "crime_type": "phishing",
+    "expected_articles": ["law175_art18", "law175_art23"],
+    "expected_entities": {
+      "urls": ["http://fake-bank.xyz/login"],
+      "emails": ["support@bank-misr-secure.com"]
+    },
+    "expected_min_score": 70
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "case_id": "TC_PRIVACY_003",
+  "crime_type": "privacy_violation",
+  "difficulty": "hard",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "صور تسربت من جلسة خاصة بيني وبين خطيبي، مينفعش حد يشوفها",
+      "expected_entities": {}
+    },
+    {
+      "block_id": "E002",
+      "text": "بتوع المدرسة نشروا صور بنات من بلوك الحمام على تويتر",
+      "expected_entities": {}
+    }
+  ],
+  "expected_output": {
+    "crime_type": "privacy_violation",
+    "expected_articles": ["law175_art25", "law175_art27"],
+    "expected_entities": {},
+    "expected_min_score": 55
+  }
+}

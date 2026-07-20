@@ -1,0 +1,23 @@
+{
+  "case_id": "TC_DATA_BREACH_001",
+  "crime_type": "data_breach",
+  "difficulty": "medium",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "شركة الاتصالات سربت بيانات العملاء ومنها أرقام التليفون والعناوين",
+      "expected_entities": {}
+    },
+    {
+      "block_id": "E002",
+      "text": "البيانات بتاعة أكتر من 5 مليون عميل اتباعت على موقع dark web",
+      "expected_entities": {}
+    }
+  ],
+  "expected_output": {
+    "crime_type": "data_breach",
+    "expected_articles": ["law175_art20", "law175_art76"],
+    "expected_entities": {},
+    "expected_min_score": 55
+  }
+}

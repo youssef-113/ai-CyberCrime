@@ -1,0 +1,22 @@
+{
+  "case_id": "TC_FINANCIAL_FRAUD_001",
+  "crime_type": "financial_fraud",
+  "difficulty": "easy",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "بعرض عليك شغل من البيت ومرتب 20000 جنيه شهرياً، بس ادفع 1000 تسجيل أولاً",
+      "expected_entities": {
+        "amounts": ["20000 جنيه", "1000"]
+      }
+    }
+  ],
+  "expected_output": {
+    "crime_type": "financial_fraud",
+    "expected_articles": ["fraud_art1", "law175_art23"],
+    "expected_entities": {
+      "amounts": ["20000 جنيه", "1000"]
+    },
+    "expected_min_score": 70
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "case_id": "TC_IDENTITY_THEFT_005",
+  "crime_type": "identity_theft",
+  "difficulty": "hard",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "انتحل شخصيتي على فيسبوك وبعت رسايل للناس عشان ياخد فلوس",
+      "expected_entities": {}
+    },
+    {
+      "block_id": "E002",
+      "text": "الصفحة المزورة فيها صوري واسمي وبياناتي كلها",
+      "expected_entities": {}
+    },
+    {
+      "block_id": "E003",
+      "text": "حول لي 1500 على فودافون كاش 01227778888",
+      "expected_entities": {
+        "amounts": ["1500"],
+        "phones": ["01227778888"]
+      }
+    }
+  ],
+  "expected_output": {
+    "crime_type": "identity_theft",
+    "expected_articles": ["law175_art19", "law175_art18"],
+    "expected_entities": {
+      "amounts": ["1500"],
+      "phones": ["01227778888"]
+    },
+    "expected_min_score": 70
+  }
+}

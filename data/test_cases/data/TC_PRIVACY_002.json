@@ -1,0 +1,25 @@
+{
+  "case_id": "TC_PRIVACY_002",
+  "crime_type": "privacy_violation",
+  "difficulty": "medium",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "جاري نشر عنواني ورقم تليفوني على موقع عام من غير موافقتي",
+      "expected_entities": {
+        "phones": ["رقم تليفوني"]
+      }
+    },
+    {
+      "block_id": "E002",
+      "text": "البيانات الشخصية بتاعتي كلها اتنشرت على جروب عام",
+      "expected_entities": {}
+    }
+  ],
+  "expected_output": {
+    "crime_type": "privacy_violation",
+    "expected_articles": ["law175_art25"],
+    "expected_entities": {},
+    "expected_min_score": 55
+  }
+}

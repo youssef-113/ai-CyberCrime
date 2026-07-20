@@ -1,0 +1,20 @@
+{
+  "case_id": "TC_ACCOUNT_HACKING_001",
+  "crime_type": "account_hacking",
+  "difficulty": "easy",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "اتسرق حسابي على الفيسبوك وغير الباسورد والبريد الإلكتروني",
+      "expected_entities": {
+        "emails": ["البريد الإلكتروني"]
+      }
+    }
+  ],
+  "expected_output": {
+    "crime_type": "account_hacking",
+    "expected_articles": ["law175_art2", "law175_art18"],
+    "expected_entities": {},
+    "expected_min_score": 55
+  }
+}

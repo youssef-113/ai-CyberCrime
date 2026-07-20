@@ -1,0 +1,35 @@
+{
+  "case_id": "TC_FINANCIAL_FRAUD_005",
+  "crime_type": "financial_fraud",
+  "difficulty": "hard",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "عمل حساب فيسبوك وهمي وأعلن عن بيع لابتوبات بخصم 80%، الناس حولت فلوس وما جالهمش حاجة",
+      "expected_entities": {}
+    },
+    {
+      "block_id": "E002",
+      "text": "ضحّى معاه 50 شخص ومبلغ 250000 جنيه",
+      "expected_entities": {
+        "amounts": ["250000 جنيه"]
+      }
+    },
+    {
+      "block_id": "E003",
+      "text": "الرقم اللي كان بياخد عليه الفلوس 01234567890",
+      "expected_entities": {
+        "phones": ["01234567890"]
+      }
+    }
+  ],
+  "expected_output": {
+    "crime_type": "financial_fraud",
+    "expected_articles": ["fraud_art1", "law175_art23"],
+    "expected_entities": {
+      "amounts": ["250000 جنيه"],
+      "phones": ["01234567890"]
+    },
+    "expected_min_score": 75
+  }
+}

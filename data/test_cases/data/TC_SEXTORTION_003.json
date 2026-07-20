@@ -1,0 +1,32 @@
+{
+  "case_id": "TC_SEXTORTION_003",
+  "crime_type": "sextortion",
+  "difficulty": "hard",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "اخترق كاميرا اللاب توب وصورني وأنا في أوضاع خاصة",
+      "expected_entities": {}
+    },
+    {
+      "block_id": "E002",
+      "text": "طالبني بمبلغ 20000 جنيه عشان ما ينشرش الفيديو",
+      "expected_entities": {
+        "amounts": ["20000 جنيه"]
+      }
+    },
+    {
+      "block_id": "E003",
+      "text": "هددني إنه يبعت الفيديو لأهلي وشغلي",
+      "expected_entities": {}
+    }
+  ],
+  "expected_output": {
+    "crime_type": "sextortion",
+    "expected_articles": ["law175_art25", "law175_art26"],
+    "expected_entities": {
+      "amounts": ["20000 جنيه"]
+    },
+    "expected_min_score": 80
+  }
+}

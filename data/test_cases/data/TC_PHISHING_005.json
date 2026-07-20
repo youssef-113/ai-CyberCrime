@@ -1,0 +1,25 @@
+{
+  "case_id": "TC_PHISHING_005",
+  "crime_type": "phishing",
+  "difficulty": "hard",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "بعتولي لينك يدخلوني على موقع وهمي شبه موقع التموين عشان يسرقوا بياناتي",
+      "expected_entities": {
+        "urls": ["لينك"]
+      }
+    },
+    {
+      "block_id": "E002",
+      "text": "ناس كتير وقعت في الموقع المزور وخسرت فلوسها",
+      "expected_entities": {}
+    }
+  ],
+  "expected_output": {
+    "crime_type": "phishing",
+    "expected_articles": ["law175_art18", "law175_art23"],
+    "expected_entities": {},
+    "expected_min_score": 55
+  }
+}

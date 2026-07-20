@@ -1,0 +1,20 @@
+{
+  "case_id": "TC_PHISHING_001",
+  "crime_type": "phishing",
+  "difficulty": "easy",
+  "evidence_texts": [
+    {
+      "block_id": "E001",
+      "text": "رسالة من البنك الأهلي: الرجاء تحديث بياناتك عبر الرابط لتفادي إغلاق الحساب",
+      "expected_entities": {
+        "urls": ["الرابط"]
+      }
+    }
+  ],
+  "expected_output": {
+    "crime_type": "phishing",
+    "expected_articles": ["law175_art18", "law175_art23"],
+    "expected_entities": {},
+    "expected_min_score": 55
+  }
+}
